@@ -276,24 +276,24 @@ def final_model(model_input, val_input):
     test_features = val_input.drop('SYMP', axis = 1)
     test_labels = val_input['SYMP'].values.ravel()
 
-    print (test_features)
+    #print (test_features)
 
 
     train_labels = model_input['SYMP'].values.ravel()
     train_features= model_input.drop('SYMP', axis = 1)
 
-    print (train_features)
+    #print (train_features)
 
 
-    #train_features, train_labels = RandomOverSampler().fit_resample(train_features, train_labels)
+    train_features, train_labels = RandomOverSampler().fit_resample(train_features, train_labels)
 
 
-    print (train_features, train_labels)
+    #print (train_features, train_labels)
 
-    model = RandomForestClassifier(n_estimators=822, 
+    model = RandomForestClassifier(n_estimators=200, 
                                    random_state=RSEED, 
                                    max_features = 'sqrt',
-                                   n_jobs=-1, verbose = 1, max_depth=None)
+                                   n_jobs=-1, verbose = 1, max_depth=460)
 
     model.fit(train_features, train_labels)
 
@@ -372,7 +372,7 @@ def cross_model_balanced(model_input, label_df):
         model = RandomForestClassifier(n_estimators=200, 
                                    random_state=RSEED, 
                                    max_features = 'sqrt',
-                                   n_jobs=-1, verbose = 1, max_depth=300)
+                                   n_jobs=-1, verbose = 1, max_depth=460)
         
         model.fit(features_resampled, labels_resampled)
         #test the model on test data
@@ -500,13 +500,13 @@ print ("load feature annotation")
 label_df = load_feat_ann(ann_file)
 
 print ("feature reduction")
-feature_df = feature_reduction(feature_df)
+#feature_df = feature_reduction(feature_df)
 
 print ("simple rf")
 simple_rf(feature_df)
 
-print ("hyperparam optimisation")
-tune_rf(feature_df)
+#print ("hyperparam optimisation")
+#tune_rf(feature_df)
 
 
 print ("cv rf")
