@@ -26,6 +26,7 @@ from sklearn.linear_model import Lasso
 # modelling 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.preprocessing import label_binarize
 from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
 from sklearn.preprocessing import StandardScaler
@@ -48,6 +49,8 @@ from yellowbrick.model_selection import RFECV
 from sklearn.model_selection import cross_val_score
 
 from imblearn.over_sampling import RandomOverSampler
+from imblearn.pipeline import Pipeline
+from imblearn.over_sampling import SMOTE
 
 
 ###### ------- MUVR ------- ######
@@ -75,6 +78,7 @@ def load_features(feature_file, meta_file, flag):
     
     print ("load feature file")
     label_kmer_df = pd.read_csv(feature_file, sep='\t', header=0, index_col=0)
+
     try:
         label_kmer_df = label_kmer_df.set_index('SRA')
     except:
@@ -89,14 +93,15 @@ def load_features(feature_file, meta_file, flag):
 
     if flag == 'T':
         all_pd = pd.read_csv(meta_file, sep='\t', header=0)
-        all_pd = all_pd[['SRA', 'SYMP', 'SNP ADDRESS']]
+        all_pd = all_pd[['SRA', 'SYMP','LINEAGE', 'SNP ADDRESS']]
         all_pd = all_pd.set_index('SRA')
         all_pd = pd.concat([all_pd, all_pd['SNP ADDRESS'].str.split('.', expand=True)], axis=1)
-        all_pd = all_pd.sort_values('SRA').drop_duplicates(subset=[5, 'SYMP'], keep='last')
-        all_pd = all_pd[['SYMP']]
+        all_pd = all_pd.sort_values('SRA').drop_duplicates(subset=[5, 'SYMP'], keep='last') #remove samples that contain a +
+        all_pd = all_pd[['SYMP','LINEAGE']]
+
     else:
         all_pd = pd.read_csv(meta_file, sep='\t', header=0)
-        all_pd = all_pd[['SRA', 'SYMP']]
+        all_pd = all_pd[['SRA', 'SYMP','LINEAGE']]
         all_pd = all_pd.set_index('SRA')
 
     print ("merge features and meta data")
@@ -137,7 +142,7 @@ def load_features(feature_file, meta_file, flag):
 def simple_rf(label_kmer_df):
 
     labels = np.array(label_kmer_df['SYMP'])
-    features= label_kmer_df.drop('SYMP', axis = 1)
+    features= label_kmer_df.drop(['SYMP','LINEAGE'], axis = 1)
 
 
     RSEED = 50
@@ -149,7 +154,7 @@ def simple_rf(label_kmer_df):
                                                                                 random_state = RSEED)
     
     #over sample
-    train_features, train_labels = RandomOverSampler().fit_resample(train_features, train_labels)
+    train_features, train_labels = RandomOverSampler().fit_resample(train_features, train_labels) #random state?
 
 
     #build the model 
@@ -173,7 +178,7 @@ def simple_rf(label_kmer_df):
         y_true= test_labels, 
         y_pred= test_model)
 
-    print('Classification Report: ' , 
+    print('Classification Report Simple RF: ' ,
           report_)
 
 
@@ -235,14 +240,14 @@ def tune_rf(model_input):
     RSEED = 50
 
     train_labels = np.array(model_input['SYMP'])
-    train= model_input.drop('SYMP', axis = 1)
+    train= model_input.drop(['SYMP','LINEAGE'], axis = 1)
 
     # number of trees in random forest
     n_estimators = [int(x) for x in np.linspace(start = 200, stop = 1000, num = 10)]
     print (n_estimators)
 
     # number of features at every split
-    max_features = ['auto', 'sqrt']
+    max_features = ['log2', 'sqrt']
 
     # max depth
     max_depth = [int(x) for x in np.linspace(100, 500, num = 11)]
@@ -260,6 +265,7 @@ def tune_rf(model_input):
     estimator = RandomForestClassifier()
 
     # Random search of parameters
+    #This hyper parameter tunning uses Stratified K-fold CV. In this method, each K-Fold retains the proportion of each class (D,BD, HUS) in the entire dataset.
     model_tunning = RandomizedSearchCV(estimator, param_distributions = random_grid, n_iter = 100, cv = 10, verbose=2, random_state=RSEED, n_jobs = -1)
 
     # Fit the model
@@ -267,8 +273,155 @@ def tune_rf(model_input):
 
     # print results
     best_param = model_tunning.best_params_
-    print(best_param)
+    print('Best params no oversampling', best_param)
 
+def tune_rf_oversampling(model_input):
+    RSEED = 50
+
+    train_labels = np.array(model_input['SYMP'])
+    train= model_input.drop(['SYMP','LINEAGE'], axis = 1)
+
+    #Oversampling strategy
+    oversampler = RandomOverSampler(random_state=RSEED)
+
+    #Model
+    model = RandomForestClassifier()
+
+    #SET UP GRID VALUES FOR HYPER-PARAMETER TUNNING
+    # number of trees in random forest
+    n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=10)]
+    print(n_estimators)
+
+    # number of features at every split
+    max_features = ['log2', 'sqrt']
+
+    # max depth
+    max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
+    # print (max_depth)
+    # max_depth.append(None)
+
+    #Create a imblearn Pipeline to tune hyper-parameters with oversampling included
+
+    tunning_pipeline=Pipeline([
+        ('oversampler', oversampler),
+        ('model',model)
+    ])
+
+    #create random grid
+    random_grid = {
+     'model__n_estimators': n_estimators,
+     'model__max_features': max_features,
+     'model__max_depth': max_depth
+     }
+
+    # Fitting the pipeline and obtain the best parameters using random-search
+    #GridSerac
+    model_tunning_oversampling = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions = random_grid, n_iter = 100, cv = 10, verbose=2, random_state=RSEED, n_jobs = -1)
+    model_tunning_oversampling.fit(train, train_labels)
+
+    # print results of the best parameters
+    best_param_oversampling = model_tunning_oversampling.best_params_
+    print("Best params oversampling: ",best_param_oversampling)
+
+def tune_rf_group(model_input):
+    # create a hyperparameter grid
+    RSEED = 50
+
+    train_labels = np.array(model_input['SYMP'])
+    train= model_input.drop(['SYMP','LINEAGE'], axis = 1)
+    lineages=np.array(model_input['LINEAGE'])
+
+    # number of trees in random forest
+    n_estimators = [int(x) for x in np.linspace(start = 200, stop = 1000, num = 10)]
+    print (n_estimators)
+
+    # number of features at every split
+    max_features = ['log2', 'sqrt']
+
+    # max depth
+    max_depth = [int(x) for x in np.linspace(100, 500, num = 11)]
+    print (max_depth)
+    max_depth.append(None)
+
+    # create random grid
+    random_grid = {
+     'n_estimators': n_estimators,
+     'max_features': max_features,
+     'max_depth': max_depth
+     }
+
+    #create iterator list according to lineages
+    logo = LeaveOneGroupOut()
+    cv_iterator = list(logo.split(train, train_labels, groups=lineages))
+
+    #for train, test in logo.split(train, train_labels, groups=lineages):
+    #    print("%s %s" % (train, test))
+
+    # generate model
+    estimator = RandomForestClassifier()
+
+    # Random search of parameters
+    model_tunning = RandomizedSearchCV(estimator, param_distributions = random_grid, n_iter = 100, cv = cv_iterator, verbose=2, random_state=RSEED, n_jobs = -1)
+
+    # Fit the model
+    model_tunning.fit(train, train_labels)
+
+    # print results
+    best_param = model_tunning.best_params_
+    print('Best parameters, considering sub-lineages', best_param)
+
+def tune_rf_group_oversampling(model_input):
+    RSEED = 50
+
+    train_labels = np.array(model_input['SYMP'])
+    train= model_input.drop(['SYMP','LINEAGE'], axis = 1)
+    lineages = np.array(model_input['LINEAGE'])
+
+    #Oversampling strategy
+    oversampler = RandomOverSampler(random_state=RSEED)
+
+    #Model
+    model = RandomForestClassifier()
+
+    #SET UP GRID VALUES FOR HYPER-PARAMETER TUNNING
+    # number of trees in random forest
+    n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=10)]
+    print(n_estimators)
+
+    # number of features at every split
+    max_features = ['log2', 'sqrt']
+
+    # max depth
+    max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
+    # print (max_depth)
+    # max_depth.append(None)
+
+    #Create a imblearn Pipeline to tune hyper-parameters with oversampling included
+
+    tunning_pipeline=Pipeline([
+        ('oversampler', oversampler),
+        ('model',model)
+    ])
+
+    #create random grid
+    random_grid = {
+     'model__n_estimators': n_estimators,
+     'model__max_features': max_features,
+     'model__max_depth': max_depth
+     }
+
+    #create iterator list according to lineages
+    logo = LeaveOneGroupOut()
+    cv_iterator = list(logo.split(train, train_labels, groups=lineages))
+
+    # Fitting the pipeline and obtain the best parameters using random-search
+    #GridSerac
+    model_tunning_oversampling = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions = random_grid, n_iter = 100, cv = cv_iterator, verbose=2, random_state=RSEED, n_jobs = -1)
+    model_tunning_oversampling.fit(train, train_labels)
+
+    # print results of the best parameters
+    best_param_oversampling = model_tunning_oversampling.best_params_
+    print("Best params oversampling, sublineages: ",best_param_oversampling)
 
 def final_model(model_input, val_input):
     RSEED = 50
@@ -311,7 +464,7 @@ def final_model(model_input, val_input):
         y_true= test_labels, 
         y_pred= test_model)
 
-    print('Classification Report: ' , 
+    print('Classification Report Validation Data: ' ,
           report_)
 
 
@@ -334,9 +487,10 @@ def final_model(model_input, val_input):
 
 def cross_model_balanced(model_input, label_df):
 
-    columns = model_input.columns.tolist()
+    #columns = model_input.columns.tolist()
     #ßprint (columns)
-    columns = columns.remove('SYMP')
+    #columns = columns.remove('SYMP')
+
     # Create 10-folds for cross validation
     row_nums = list(range(len(model_input)))
     random.shuffle(row_nums)
@@ -348,24 +502,28 @@ def cross_model_balanced(model_input, label_df):
     acc_muvr_max = []
     RSEED = 50
 
+    #data frame for storing probabilities of classification
     final_res = pd.DataFrame()
+    #data frame for storing feature importance
     final_imp = pd.DataFrame()
     list_shap_values = list()
     list_test_sets = pd.DataFrame()
 
+    #Test-set true lables
     list_test_labels = []
+    #Test-set predictions
     list_test_pred = []
     
     for x in range(10):
         
         test = model_input.iloc[splits[x]]
         samples = test.index.values.tolist()
-        test_features = test.drop('SYMP', axis = 1)
+        test_features = test.drop(['SYMP','LINEAGE'], axis = 1)
         test_labels = test['SYMP'].values.ravel()
         train = model_input.drop(splits_indeces[x],axis=0)
-        train_features = train.drop('SYMP', axis = 1)
+        train_features = train.drop(['SYMP','LINEAGE'], axis = 1)
         train_labels = train['SYMP'].values.ravel()
-        features_resampled, labels_resampled = RandomOverSampler().fit_resample(train_features, train_labels)
+        features_resampled, labels_resampled = RandomOverSampler(random_state=RSEED).fit_resample(train_features, train_labels)
 
 
 
@@ -383,7 +541,6 @@ def cross_model_balanced(model_input, label_df):
      
         list_test_labels = list_test_labels + list(test_labels)
         list_test_pred = list_test_pred + list(test_model)
-
 
 
         # 4. extract feature importance 
@@ -421,10 +578,10 @@ def cross_model_balanced(model_input, label_df):
     print(sum(acc_muvr_max)/len(acc_muvr_max))
     
     #outputs commented out
-    final_res.to_csv(r'final_pred_new5.tsv', sep='\t')
+    final_res.to_csv(r'final_pred_standard_fixed.tsv', sep='\t')
     final_imp['average'] = final_imp.mean(numeric_only=True, axis=1)
     final_imp = final_imp.sort_values('average', ascending=False)
-    final_imp.to_csv(r'final_imp_new5.tsv', sep='\t')
+    final_imp.to_csv(r'final_standard_fixed.tsv', sep='\t')
     
 
 #   combining results from all iterations
@@ -432,23 +589,20 @@ def cross_model_balanced(model_input, label_df):
     for i in range(1,len(list_shap_values)):
         shap_values = np.concatenate((shap_values,np.array(list_shap_values[i])),axis=1)
     
-
-
-
     #print shap uncomment
-    #label_dict = dict(zip(label_df['Sequence'], label_df['ANN']))
-    #fest = list_test_sets.columns.values.tolist()
+    label_dict = dict(zip(label_df['Sequence'], label_df['ANN']))
+    fest = list_test_sets.columns.values.tolist()
 
-    #anns = []
-    #for f in fest:
-    #    anns.append(label_dict[f])
+    anns = []
+    for f in fest:
+        anns.append(label_dict[f])
 
 
-    #print (model.classes_)
+    print (model.classes_)
 
     #shap.summary_plot(shap_values[0], list_test_sets, feature_names=anns)
-    ##shap.summary_plot(shap_values[1], list_test_sets,feature_names=anns)
-    #shap.summary_plot(shap_values[2], list_test_sets,feature_names=anns)
+    #shap.summary_plot(shap_values[1], list_test_sets,feature_names=anns)
+    shap.summary_plot(shap_values[2], list_test_sets,feature_names=anns)
 
     #shap.summary_plot(shap_values[0], list_test_sets)
     #shap.summary_plot(shap_values[1], list_test_sets)
@@ -471,7 +625,7 @@ def calc_accuracy(preds, labels):
             digits=6,
             y_true= labels, 
             y_pred= preds)
-    print('Classification Report: ' , 
+    print('Classification Report Training Data: ' ,
           report_)
     cm = confusion_matrix(labels, preds, labels=['BD','D','HUS'])
     disp = ConfusionMatrixDisplay.from_predictions(cmap=plt.cm.Blues, y_true = labels, y_pred = preds, display_labels=['Bloody Diarrhoea', 'Diarrhoea', 'HUS'], normalize='true', values_format='.1g')
@@ -481,8 +635,10 @@ def calc_accuracy(preds, labels):
     
 
 
-    #RocCurveDisplay.from_predictions(y_true = labels, y_pred = preds)
-    #plt.show()
+    RocCurveDisplay.from_predictions(y_true = labels, y_pred = preds)
+    plt.show()
+
+
 
 ################ MAIN ##############
 
@@ -492,32 +648,44 @@ feature_file, ann_file, meta_file, val_file = get_opts()
 print ("load training data")
 feature_df = load_features(feature_file, meta_file,"T")
 
-
 print ("load validation data")
 val_df = load_features(val_file, meta_file,"V")
 
 print ("load feature annotation")
 label_df = load_feat_ann(ann_file)
 
-print ("feature reduction")
+#print ("feature reduction")
 #feature_df = feature_reduction(feature_df)
 
-print ("simple rf")
-simple_rf(feature_df)
+#print ("simple rf")
+#simple_rf(feature_df)
 
+#Check hyper-parameters optimization
 #print ("hyperparam optimisation")
 #tune_rf(feature_df)
 
+#print ("hyperparam optimisation")
+#tune_rf_oversampling(feature_df)
 
-print ("cv rf")
+#print ("hyperparam optimisation")
+#tune_rf_group(feature_df)
+
+#print ("hyperparam optimisation")
+#tune_rf_group_oversampling(feature_df)
+
+#print ("hyperparam optimisation considering sub-lineages")
+#tune_rf_group(feature_df)
+
+
+#print ("cv rf")
 final_res, final_imp, preds, labels = cross_model_balanced(feature_df, label_df)
 
 
-calc_accuracy(preds, labels)
+#calc_accuracy(preds, labels)
 
-imp_fasta = create_fasta(final_imp)
+#imp_fasta = create_fasta(final_imp)
 
-final_model(feature_df, val_df)
+#final_model(feature_df, val_df)
 
 
 
