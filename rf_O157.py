@@ -27,6 +27,7 @@ from sklearn.linear_model import Lasso
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import LeaveOneGroupOut
+from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.preprocessing import label_binarize
 from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
 from sklearn.preprocessing import StandardScaler
@@ -93,7 +94,7 @@ def load_features(feature_file, meta_file, flag):
 
     if flag == 'T':
         all_pd = pd.read_csv(meta_file, sep='\t', header=0)
-        all_pd = all_pd[['SRA', 'SYMP','LINEAGE', 'SNP ADDRESS']]
+        all_pd = all_pd[['SRA', 'SYMP','LINEAGE','SNP ADDRESS']]
         all_pd = all_pd.set_index('SRA')
         all_pd = pd.concat([all_pd, all_pd['SNP ADDRESS'].str.split('.', expand=True)], axis=1)
         all_pd = all_pd.sort_values('SRA').drop_duplicates(subset=[5, 'SYMP'], keep='last') #remove samples that contain a +
@@ -107,6 +108,9 @@ def load_features(feature_file, meta_file, flag):
     print ("merge features and meta data")
 
     merge_pd =pd.merge(label_kmer_df,all_pd, left_index=True, right_index=True)
+    symptom_counts_train = merge_pd['SYMP'].value_counts()
+    print('Symptomps count training', symptom_counts_train)
+
 
     #merge_pd.loc[merge_pd['SYMP'] == 'HUS', 'SYMP'] = 'BD'
 
@@ -135,6 +139,110 @@ def load_features(feature_file, meta_file, flag):
     #print (label_kmer_df)
 
     return merge_pd
+
+
+def split_dataset(meta_file,feature_file):
+        RSEED=50
+        #Load the features table
+        label_kmer_df = pd.read_csv(feature_file, sep='\t', header=0, index_col=0)
+        label_kmer_df = label_kmer_df.drop('SYMP',axis=1)
+
+        #load the metadata
+        metadata = pd.read_csv(meta_file, sep='\t', header=0)
+        metadata = metadata.set_index('SRA')
+        metadata=metadata.iloc[:,:16]
+
+        all_pd = pd.merge(label_kmer_df, metadata, left_index=True, right_index=True)
+
+        #all_pd = pd.read_csv(meta_file, sep='\t', header=0)
+        #all_pd = all_pd[['SRA', 'SYMP', 'LINEAGE', 'SNP ADDRESS']]
+        #Set the index to the SRA code
+        #all_pd = all_pd.set_index('SRA')
+
+        #Create new dataframes for each sublineage
+        lineage_categories = all_pd['LINEAGE'].unique()
+            #Create an empty dictoniary to store the DataFrames
+        lineage_dfs = {}
+
+            # Iterate over each 'LINEAGE' category and create a separate DataFrame for each
+        for lineage in lineage_categories:
+            mask = all_pd['LINEAGE'] == lineage
+            lineage_dfs[lineage] = all_pd[mask]
+
+        #Create an empty dictoniary to store the train-test splits
+        train_test_splits={}
+
+        #Iterate over the LINEAGE dictonary
+        for lineage in lineage_categories:
+            #Select the correct lineage dataframe
+            current_lineage_df = lineage_dfs[lineage]
+            #stablish the label column
+            labels = np.array(current_lineage_df['SYMP'])
+            #stablish the t5 clusters
+            t5=np.array(current_lineage_df['t5'])
+
+            #Create the iterator for the Splits - here we use 5 splits to get an approximate 80/20 split
+            sfgs=StratifiedGroupKFold(n_splits=5)
+            cv_iterator = list(sfgs.split(current_lineage_df, labels, groups=t5))
+
+            #randomly chose one of the splits
+            random.seed(42)
+            random_split=random.choice(cv_iterator)
+
+            #Get two different dataframes with the test and train data.
+            test_data = current_lineage_df.iloc[random_split[1]]
+            train_data = current_lineage_df.iloc[random_split[0]]
+            #Add everything to a dictonary
+            train_test_splits[lineage] = train_data,test_data
+
+
+#Combine all train and test data into a single dataset
+        train_dfs=train_dfs = [split[0] for split in train_test_splits.values()]
+        final_train = pd.concat(train_dfs, ignore_index=True)
+
+        test_dfs = train_dfs = [split[1] for split in train_test_splits.values()]
+        final_test = pd.concat(test_dfs, ignore_index=True)
+
+        #THIS WILL BE REMOVED===============
+        filtered_train = final_train[final_train['SYMP'] == 'HUS']
+
+        filtered_test = final_test[final_test['SYMP'] == 'HUS']
+
+        specific_columns = ['LINEAGE', 'SYMP', 't5']
+
+        for column in specific_columns:
+            if column in final_test.columns:
+                value_counts = final_test[column].value_counts()
+                print(f"Metric Test Set: {column}\n{value_counts}\n")
+            else:
+                print(f"Column {column} not found in the DataFrame.\n")
+
+        for column in specific_columns:
+            if column in final_train.columns:
+                value_counts = final_train[column].value_counts()
+                print(f"Metric Train Set: {column}\n{value_counts}\n")
+            else:
+                print(f"Column {column} not found in the DataFrame.\n")
+
+        for column in specific_columns:
+            if column in filtered_train.columns:
+                value_counts = filtered_train[column].value_counts()
+                print(f"Metric Filtered Train Set: {column}\n{value_counts}\n")
+            else:
+                print(f"Column {column} not found in the DataFrame.\n")
+
+        for column in specific_columns:
+            if column in filtered_test.columns:
+                value_counts = filtered_test[column].value_counts()
+                print(f"Metric Filtered Test Set: {column}\n{value_counts}\n")
+            else:
+                print(f"Column {column} not found in the DataFrame.\n")
+
+        #UNTIL HERE======================
+        print('something')
+        return final_train, final_test
+
+
 
 
 
@@ -275,6 +383,57 @@ def tune_rf(model_input):
     best_param = model_tunning.best_params_
     print('Best params no oversampling', best_param)
 
+def tune_rf_smote(model_input):
+    RSEED = 50
+
+    train_labels = np.array(model_input['SYMP'])
+    train= model_input.drop(['SYMP','LINEAGE'], axis = 1)
+
+    #Oversampling strategy
+    oversampler = SMOTE(random_state=RSEED)
+
+    #Model
+    model = RandomForestClassifier()
+
+    #SET UP GRID VALUES FOR HYPER-PARAMETER TUNNING
+    # number of trees in random forest
+    n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=10)]
+    print(n_estimators)
+    # number of features at every split
+    max_features = ['log2', 'sqrt']
+
+    # max depth
+    max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
+    # print (max_depth)
+    # max_depth.append(None)
+
+    #K_neighbors for SMOTE
+    k_neighbors = [int(x) for x in np.linspace(start=0, stop=10, num=10)]
+
+    #Create a imblearn Pipeline to tune hyper-parameters with oversampling included
+
+    tunning_pipeline=Pipeline([
+        ('oversampler', oversampler),
+        ('model',model)
+    ])
+
+    #create random grid
+    random_grid = {
+     'oversampler__k_neighbors': k_neighbors,
+     'model__n_estimators': n_estimators,
+     'model__max_features': max_features,
+     'model__max_depth': max_depth
+     }
+
+    # Fitting the pipeline and obtain the best parameters using random-search
+    #GridSerac
+    model_tunning_oversampling = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions = random_grid, n_iter = 100, cv = 10, verbose=2, random_state=RSEED, n_jobs = -1)
+    model_tunning_oversampling.fit(train, train_labels)
+
+    # print results of the best parameters
+    best_param_oversampling = model_tunning_oversampling.best_params_
+    print("Best params SMOTE: ",best_param_oversampling)
+
 def tune_rf_oversampling(model_input):
     RSEED = 50
 
@@ -405,6 +564,62 @@ def tune_rf_group_oversampling(model_input):
 
     #create random grid
     random_grid = {
+     'model__n_estimators': n_estimators,
+     'model__max_features': max_features,
+     'model__max_depth': max_depth
+     }
+
+    #create iterator list according to lineages
+    logo = LeaveOneGroupOut()
+    cv_iterator = list(logo.split(train, train_labels, groups=lineages))
+
+    # Fitting the pipeline and obtain the best parameters using random-search
+    #GridSerac
+    model_tunning_oversampling = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions = random_grid, n_iter = 100, cv = cv_iterator, verbose=2, random_state=RSEED, n_jobs = -1)
+    model_tunning_oversampling.fit(train, train_labels)
+
+    # print results of the best parameters
+    best_param_oversampling = model_tunning_oversampling.best_params_
+    print("Best params oversampling, sublineages: ",best_param_oversampling)
+
+def tune_rf_group_smote(model_input):
+    RSEED = 50
+
+    train_labels = np.array(model_input['SYMP'])
+    train= model_input.drop(['SYMP','LINEAGE'], axis = 1)
+    lineages = np.array(model_input['LINEAGE'])
+
+    #Oversampling strategy
+    oversampler = SMOTE(random_state=RSEED)
+
+    #Model
+    model = RandomForestClassifier()
+
+    #SET UP GRID VALUES FOR HYPER-PARAMETER TUNNING
+    # number of trees in random forest
+    n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=10)]
+    print(n_estimators)
+
+    # number of features at every split
+    max_features = ['log2', 'sqrt']
+
+    # max depth
+    max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
+    # print (max_depth)
+    # max_depth.append(None)
+
+    k_neighbors = [int(x) for x in np.linspace(start=0, stop=10, num=10)]
+
+    #Create a imblearn Pipeline to tune hyper-parameters with oversampling included
+
+    tunning_pipeline=Pipeline([
+        ('oversampler', oversampler),
+        ('model',model)
+    ])
+
+    #create random grid
+    random_grid = {
+     'oversampler__k_neighbors': k_neighbors,
      'model__n_estimators': n_estimators,
      'model__max_features': max_features,
      'model__max_depth': max_depth
@@ -707,10 +922,10 @@ def cross_model_balanced_grouped(model_input, label_df):
     print(sum(acc_muvr_max) / len(acc_muvr_max))
 
     # outputs commented out
-    final_res.to_csv(r'final_pred_grouped_test.tsv', sep='\t')
-    final_imp['average'] = final_imp.mean(numeric_only=True, axis=1)
-    final_imp = final_imp.sort_values('average', ascending=False)
-    final_imp.to_csv(r'final_grouped_test.tsv', sep='\t')
+    #final_res.to_csv(r'final_pred_grouped_test.tsv', sep='\t')
+    #final_imp['average'] = final_imp.mean(numeric_only=True, axis=1)
+    #final_imp = final_imp.sort_values('average', ascending=False)
+    #final_imp.to_csv(r'final_grouped_test.tsv', sep='\t')
 
     #   combining results from all iterations
     shap_values = np.array(list_shap_values[0])
@@ -760,11 +975,8 @@ def calc_accuracy(preds, labels):
     disp.plot()
     plt.show()
 
-    
-
-
-    RocCurveDisplay.from_predictions(y_true = labels, y_pred = preds)
-    plt.show()
+    #RocCurveDisplay.from_predictions(y_true = labels, y_pred = preds)
+    #plt.show()
 
 
 
@@ -773,14 +985,16 @@ def calc_accuracy(preds, labels):
 
 feature_file, ann_file, meta_file, val_file = get_opts()
 
-print ("load training data")
-feature_df = load_features(feature_file, meta_file,"T")
+train_data,validation_data=split_dataset(meta_file,feature_file)
 
-print ("load validation data")
-val_df = load_features(val_file, meta_file,"V")
+#print ("load training data")
+#feature_df = load_features(feature_file, meta_file,"T")
 
-print ("load feature annotation")
-label_df = load_feat_ann(ann_file)
+#print ("load validation data")
+#val_df = load_features(val_file, meta_file,"V")
+
+#print ("load feature annotation")
+#label_df = load_feat_ann(ann_file)
 
 #print ("feature reduction")
 #feature_df = feature_reduction(feature_df)
@@ -804,13 +1018,16 @@ label_df = load_feat_ann(ann_file)
 #print ("hyperparam optimisation considering sub-lineages")
 #tune_rf_group(feature_df)
 
+#print ("SMOTE optimization grouped")
+#tune_rf_group_smote(feature_df)
+
 
 #print ("cv rf")
 #final_res, final_imp, preds, labels = cross_model_balanced(feature_df, label_df)
 #calc_accuracy(preds, labels)
 
-final_res_grouped, final_imp_grouped, preds_grouped, labels_grouped = cross_model_balanced_grouped(feature_df, label_df)
-calc_accuracy(preds_grouped, labels_grouped)
+#final_res_grouped, final_imp_grouped, preds_grouped, labels_grouped = cross_model_balanced_grouped(feature_df, label_df)
+#calc_accuracy(preds_grouped, labels_grouped)
 
 
 #imp_fasta = create_fasta(final_imp)
