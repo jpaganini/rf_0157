@@ -28,6 +28,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.model_selection import GroupKFold
 from sklearn.preprocessing import label_binarize
 from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
 from sklearn.preprocessing import StandardScaler
@@ -376,161 +377,12 @@ def tune_rf(model_input):
     best_param = model_tunning.best_params_
     print('Best params no oversampling', best_param)
 
-def tune_rf_smote(model_input):
-    RSEED = 50
 
-    train_labels = np.array(model_input['SYMP'])
-    train= model_input.drop(['SYMP','LINEAGE'], axis = 1)
-
-    #Oversampling strategy
-    oversampler = SMOTE(random_state=RSEED)
-
-    #Model
-    model = RandomForestClassifier()
-
-    #SET UP GRID VALUES FOR HYPER-PARAMETER TUNNING
-    # number of trees in random forest
-    n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=10)]
-    print(n_estimators)
-    # number of features at every split
-    max_features = ['log2', 'sqrt']
-
-    # max depth
-    max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
-    # print (max_depth)
-    # max_depth.append(None)
-
-    #K_neighbors for SMOTE
-    k_neighbors = [int(x) for x in np.linspace(start=0, stop=10, num=10)]
-
-    #Create a imblearn Pipeline to tune hyper-parameters with oversampling included
-
-    tunning_pipeline=Pipeline([
-        ('oversampler', oversampler),
-        ('model',model)
-    ])
-
-    #create random grid
-    random_grid = {
-     'oversampler__k_neighbors': k_neighbors,
-     'model__n_estimators': n_estimators,
-     'model__max_features': max_features,
-     'model__max_depth': max_depth
-     }
-
-    # Fitting the pipeline and obtain the best parameters using random-search
-    #GridSerac
-    model_tunning_oversampling = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions = random_grid, n_iter = 100, cv = 10, verbose=2, random_state=RSEED, n_jobs = -1)
-    model_tunning_oversampling.fit(train, train_labels)
-
-    # print results of the best parameters
-    best_param_oversampling = model_tunning_oversampling.best_params_
-    print("Best params SMOTE: ",best_param_oversampling)
-
-def tune_rf_oversampling(model_input):
-    RSEED = 50
-
-    train_labels = np.array(model_input['SYMP'])
-    train= model_input.drop(['SYMP','LINEAGE'], axis = 1)
-
-    #Oversampling strategy
-    oversampler = RandomOverSampler(random_state=RSEED)
-
-    #Model
-    model = RandomForestClassifier()
-
-    #SET UP GRID VALUES FOR HYPER-PARAMETER TUNNING
-    # number of trees in random forest
-    n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=10)]
-    print(n_estimators)
-
-    # number of features at every split
-    max_features = ['log2', 'sqrt']
-
-    # max depth
-    max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
-    # print (max_depth)
-    # max_depth.append(None)
-
-    #Create a imblearn Pipeline to tune hyper-parameters with oversampling included
-
-    tunning_pipeline=Pipeline([
-        ('oversampler', oversampler),
-        ('model',model)
-    ])
-
-    #create random grid
-    random_grid = {
-     'model__n_estimators': n_estimators,
-     'model__max_features': max_features,
-     'model__max_depth': max_depth
-     }
-
-    # Fitting the pipeline and obtain the best parameters using random-search
-    #GridSerac
-    model_tunning_oversampling = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions = random_grid, n_iter = 100, cv = 10, verbose=2, random_state=RSEED, n_jobs = -1)
-    model_tunning_oversampling.fit(train, train_labels)
-
-    # print results of the best parameters
-    best_param_oversampling = model_tunning_oversampling.best_params_
-    print("Best params oversampling: ",best_param_oversampling)
-
-def tune_rf_group(model_input):
-    # create a hyperparameter grid
-    RSEED = 50
-
-    train_labels = np.array(model_input['SYMP'])
-    train= model_input.drop(['SYMP','LINEAGE'], axis = 1)
-    lineages=np.array(model_input['LINEAGE'])
-
-    # number of trees in random forest
-    n_estimators = [int(x) for x in np.linspace(start = 200, stop = 1000, num = 10)]
-    print (n_estimators)
-
-    # number of features at every split
-    max_features = ['log2', 'sqrt']
-
-    # max depth
-    max_depth = [int(x) for x in np.linspace(100, 500, num = 11)]
-    print (max_depth)
-    max_depth.append(None)
-
-    # create random grid
-    random_grid = {
-     'n_estimators': n_estimators,
-     'max_features': max_features,
-     'max_depth': max_depth
-     }
-
-    #create iterator list according to lineages
-    logo = LeaveOneGroupOut()
-    cv_iterator = list(logo.split(train, train_labels, groups=lineages))
-
-    #for train, test in logo.split(train, train_labels, groups=lineages):
-    #    print("%s %s" % (train, test))
-
-    # generate model
-    estimator = RandomForestClassifier()
-
-    # Random search of parameters
-    model_tunning = RandomizedSearchCV(estimator, param_distributions = random_grid, n_iter = 100, cv = cv_iterator, verbose=2, random_state=RSEED, n_jobs = -1)
-
-    # Fit the model
-    model_tunning.fit(train, train_labels)
-
-    # print results
-    best_param = model_tunning.best_params_
-    print('Best parameters, considering sub-lineages', best_param)
-
-def tune_rf_group_oversampling_sublineages(model_input):
+def tune_rf_group_oversampling(model_input, sampling,block_strategy):
     RSEED = 50
 
     train_labels = np.array(model_input['SYMP'])
     train= model_input.iloc[:, :-16]
-    lineages = np.array(model_input['LINEAGE'])
-
-    #Oversampling strategy
-    oversampler = RandomOverSampler(random_state=RSEED)
 
     #Model
     model = RandomForestClassifier()
@@ -550,77 +402,65 @@ def tune_rf_group_oversampling_sublineages(model_input):
 
     #Create a imblearn Pipeline to tune hyper-parameters with oversampling included
 
-    tunning_pipeline=Pipeline([
-        ('oversampler', oversampler),
-        ('model',model)
-    ])
 
-    #create random grid
-    random_grid = {
-     'model__n_estimators': n_estimators,
-     'model__max_features': max_features,
-     'model__max_depth': max_depth
-     }
 
-    #create iterator list according to lineages
-    logo = LeaveOneGroupOut()
-    cv_iterator = list(logo.split(train, train_labels, groups=lineages))
+    # Oversampling strategy, random grid and Pipeline
+    if sampling == 'random':
+        oversampler = RandomOverSampler(random_state=RSEED)
+        # create random grid
+        random_grid = {
+            'model__n_estimators': n_estimators,
+            'model__max_features': max_features,
+            'model__max_depth': max_depth
+        }
 
-    # Fitting the pipeline and obtain the best parameters using random-search
-    #GridSerac
-    model_tunning_oversampling = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions = random_grid, n_iter = 100, cv = cv_iterator, verbose=2, random_state=RSEED, n_jobs = -1)
-    model_tunning_oversampling.fit(train, train_labels)
+        tunning_pipeline = Pipeline([
+            ('oversampler', oversampler),
+            ('model', model)
+        ])
 
-    # print results of the best parameters
-    best_param_oversampling_lineage = model_tunning_oversampling.best_params_
-    print("Best params oversampling, sublineages: ",best_param_oversampling_lineage)
+    if sampling == 'smote':
+        oversampler = SMOTE(random_state=RSEED)
+        # create random grid
+        random_grid = {
+            'oversampler__k_neighbors': k_neighbors,
+            'model__n_estimators': n_estimators,
+            'model__max_features': max_features,
+            'model__max_depth': max_depth
+        }
 
-def tune_rf_group_oversampling_t5(model_input):
-    RSEED = 50
+        tunning_pipeline = Pipeline([
+            ('oversampler', oversampler),
+            ('model', model)
+        ])
 
-    train_labels = np.array(model_input['SYMP'])
-    train= model_input.iloc[:, :-16]
-    groups = np.array(model_input['t5'])
+    if sampling == 'none':
+        oversampler = SMOTE(random_state=RSEED)
+        # create random grid
+        random_grid = {
+            'model__n_estimators': n_estimators,
+            'model__max_features': max_features,
+            'model__max_depth': max_depth
+        }
 
-    #Oversampling strategy
-    oversampler = RandomOverSampler(random_state=RSEED)
+        tunning_pipeline = Pipeline([
+            ('model', model)
+        ])
 
-    #Model
-    model = RandomForestClassifier()
+    #create iterator list according to the blocking strategy
+    if block_strategy=='t5':
+        sfgs = StratifiedGroupKFold(n_splits=10)
+        groups = np.array(model_input['t5'])
+        cv_iterator = list(sfgs.split(train, train_labels, groups=groups))
 
-    #SET UP GRID VALUES FOR HYPER-PARAMETER TUNNING
-    # number of trees in random forest
-    n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=10)]
-    print(n_estimators)
+    if block_strategy=='lineage':
+        logo = LeaveOneGroupOut()
+        groups = np.array(model_input['LINEAGE'])
+        cv_iterator = list(logo.split(train, train_labels, groups=groups))
 
-    # number of features at every split
-    max_features = ['log2', 'sqrt']
-
-    # max depth
-    max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
-    # print (max_depth)
-    # max_depth.append(None)
-
-    #Create a imblearn Pipeline to tune hyper-parameters with oversampling included
-
-    tunning_pipeline=Pipeline([
-        ('oversampler', oversampler),
-        ('model',model)
-    ])
-
-    #create random grid
-    random_grid = {
-     'model__n_estimators': n_estimators,
-     'model__max_features': max_features,
-     'model__max_depth': max_depth
-     }
-
-    #create iterator list according to t5
-    sfgs = StratifiedGroupKFold(n_splits=10)
-    cv_iterator = list(sfgs.split(train, train_labels, groups=groups))
 
     # Fitting the pipeline and obtain the best parameters using random-search
-    #GridSerac
+    #GridSearch
     model_tunning_oversampling = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions = random_grid, n_iter = 100, cv = cv_iterator, verbose=2, random_state=RSEED, n_jobs = -1)
     model_tunning_oversampling.fit(train, train_labels)
 
@@ -628,120 +468,6 @@ def tune_rf_group_oversampling_t5(model_input):
     best_param_oversampling_t5 = model_tunning_oversampling.best_params_
     print("Best params oversampling, t5: ",best_param_oversampling_t5)
 
-
-def tune_rf_group_smote(model_input):
-    RSEED = 50
-
-    train_labels = np.array(model_input['SYMP'])
-    train= model_input.iloc[:,:-16]
-    lineages = np.array(model_input['LINEAGE'])
-
-    #Oversampling strategy
-    oversampler = SMOTE(random_state=RSEED)
-
-    #Model
-    model = RandomForestClassifier()
-
-    #SET UP GRID VALUES FOR HYPER-PARAMETER TUNNING
-    # number of trees in random forest
-    n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=10)]
-    print(n_estimators)
-
-    # number of features at every split
-    max_features = ['log2', 'sqrt']
-
-    # max depth
-    max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
-    # print (max_depth)
-    # max_depth.append(None)
-
-    k_neighbors = [int(x) for x in np.linspace(start=0, stop=10, num=10)]
-
-    #Create a imblearn Pipeline to tune hyper-parameters with oversampling included
-
-    tunning_pipeline=Pipeline([
-        ('oversampler', oversampler),
-        ('model',model)
-    ])
-
-    #create random grid
-    random_grid = {
-     'oversampler__k_neighbors': k_neighbors,
-     'model__n_estimators': n_estimators,
-     'model__max_features': max_features,
-     'model__max_depth': max_depth
-     }
-
-    #create iterator list according to lineages
-    logo = LeaveOneGroupOut()
-    cv_iterator = list(logo.split(train, train_labels, groups=lineages))
-
-    # Fitting the pipeline and obtain the best parameters using random-search
-    #GridSerac
-    model_tunning_oversampling = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions = random_grid, n_iter = 100, cv = cv_iterator, verbose=2, random_state=RSEED, n_jobs = -1)
-    model_tunning_oversampling.fit(train, train_labels)
-
-    # print results of the best parameters
-    best_param_oversampling_smote = model_tunning_oversampling.best_params_
-    print("Best params SMOTE, sublineages: ",best_param_oversampling_smote)
-
-def tune_rf_group_smote_t5(model_input):
-    RSEED = 50
-
-    train_labels = np.array(model_input['SYMP'])
-    train = model_input.iloc[:, :-16]
-    groups = np.array(model_input['t5'])
-
-    # Oversampling strategy
-    oversampler = SMOTE(random_state=RSEED)
-
-    # Model
-    model = RandomForestClassifier()
-
-    # SET UP GRID VALUES FOR HYPER-PARAMETER TUNNING
-    # number of trees in random forest
-    n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=10)]
-    print(n_estimators)
-
-    # number of features at every split
-    max_features = ['log2', 'sqrt']
-
-    # max depth
-    max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
-    # print (max_depth)
-    # max_depth.append(None)
-
-    k_neighbors = [int(x) for x in np.linspace(start=0, stop=5, num=5)]
-
-    # Create a imblearn Pipeline to tune hyper-parameters with oversampling included
-
-    tunning_pipeline = Pipeline([
-        ('oversampler', oversampler),
-        ('model', model)
-    ])
-
-    # create random grid
-    random_grid = {
-        'oversampler__k_neighbors': k_neighbors,
-        'model__n_estimators': n_estimators,
-        'model__max_features': max_features,
-        'model__max_depth': max_depth
-    }
-
-    # create iterator list according to lineages
-    sfgs = StratifiedGroupKFold(n_splits=10)
-    cv_iterator = list(sfgs.split(train, train_labels, groups=groups))
-
-    # Fitting the pipeline and obtain the best parameters using random-search
-    # GridSerac
-    model_tunning_oversampling = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions=random_grid,
-                                                    n_iter=100, cv=cv_iterator, verbose=2, random_state=RSEED,
-                                                    n_jobs=-1)
-    model_tunning_oversampling.fit(train, train_labels)
-
-    # print results of the best parameters
-    best_param_oversampling_t5 = model_tunning_oversampling.best_params_
-    print("Best params oversampling, t5: ", best_param_oversampling_t5)
 
 def final_model(model_input, val_input):
     RSEED = 50
@@ -941,8 +667,8 @@ def cross_model_balanced_t5(model_input, label_df,sampling):
     RSEED = 50
 
     #Create an iterator to separate files in groups
-    sfgs = StratifiedGroupKFold(n_splits=10)
-    cv_iterator = list(sfgs.split(features, all_labels, groups=groups))
+    sgkf=StratifiedGroupKFold(n_splits=10)
+    cv_iterator = list(sgkf.split(features, all_labels, groups=groups))
 
     #to hold the max accuracy
     acc_muvr_max = []
@@ -1262,7 +988,7 @@ label_df = load_feat_ann(ann_file)
 #final_res_grouped, final_imp_grouped, preds_grouped, labels_grouped = cross_model_balanced_sublineage(train_data, label_df)
 #calc_accuracy(preds_grouped, labels_grouped)
 
-final_res_t5, final_imp_t5, preds_t5, labels_t5 = cross_model_balanced_t5(train_data, label_df,'smote')
+final_res_t5, final_imp_t5, preds_t5, labels_t5 = cross_model_balanced_t5(train_data, label_df,'random')
 calc_accuracy(preds_t5, labels_t5)
 
 
