@@ -378,7 +378,7 @@ def tune_rf(model_input):
     print('Best params no oversampling', best_param)
 
 
-def tune_rf_group_oversampling(model_input, sampling,block_strategy):
+def tune_rf_group_oversampling(model_input, sampling, block_strategy):
     RSEED = 50
 
     train_labels = np.array(model_input['SYMP'])
@@ -449,13 +449,13 @@ def tune_rf_group_oversampling(model_input, sampling,block_strategy):
 
     #create iterator list according to the blocking strategy
     if block_strategy=='t5':
-        sfgs = StratifiedGroupKFold(n_splits=10)
         groups = np.array(model_input['t5'])
+        sfgs = StratifiedGroupKFold(n_splits=10)
         cv_iterator = list(sfgs.split(train, train_labels, groups=groups))
 
     if block_strategy=='lineage':
-        logo = LeaveOneGroupOut()
         groups = np.array(model_input['LINEAGE'])
+        logo = LeaveOneGroupOut()
         cv_iterator = list(logo.split(train, train_labels, groups=groups))
 
 
@@ -465,9 +465,9 @@ def tune_rf_group_oversampling(model_input, sampling,block_strategy):
     model_tunning_oversampling.fit(train, train_labels)
 
     # print results of the best parameters
-    best_param_oversampling_t5 = model_tunning_oversampling.best_params_
-    print("Best params oversampling, t5: ",best_param_oversampling_t5)
-
+    best_param_oversampling= model_tunning_oversampling.best_params_
+    print("Best params:",best_param_oversampling)
+    return best_param_oversampling
 
 def final_model(model_input, val_input):
     RSEED = 50
@@ -656,19 +656,27 @@ def cross_model_balanced(model_input, label_df):
 
     return final_res, final_imp, list_test_pred, list_test_labels
 
-def cross_model_balanced_t5(model_input, label_df,sampling):
+def cross_model_balanced_blocked(model_input, label_df,sampling,block_strategy):
 
     #1. Import the data
     all_labels = np.array(model_input['SYMP'])
     features= model_input.iloc[:,:-16]
-    groups=np.array(model_input['t5'])
+
 
     #set up the random seed
     RSEED = 50
 
     #Create an iterator to separate files in groups
-    sgkf=StratifiedGroupKFold(n_splits=10)
-    cv_iterator = list(sgkf.split(features, all_labels, groups=groups))
+    if block_strategy=='t5':
+        groups = np.array(model_input['t5'])
+        sgkf=StratifiedGroupKFold(n_splits=10)
+        cv_iterator = list(sgkf.split(features, all_labels, groups=groups))
+
+    if block_strategy=='lineage':
+        groups = np.array(model_input['LINEAGE'])
+        logo = LeaveOneGroupOut()
+        cv_iterator = list(logo.split(features, all_labels, groups=lineages))
+
 
     #to hold the max accuracy
     acc_muvr_max = []
@@ -701,7 +709,7 @@ def cross_model_balanced_t5(model_input, label_df,sampling):
                                            random_state=RSEED,
                                            max_features='sqrt',
                                            n_jobs=-1, verbose=1, max_depth=300)
-        else:
+        if sampling=='smote':
             features_resampled, labels_resampled = SMOTE(random_state=RSEED,k_neighbors=2).fit_resample(train_features,train_labels)
             model = RandomForestClassifier(n_estimators=644,
                                            random_state=RSEED,
@@ -956,40 +964,23 @@ label_df = load_feat_ann(ann_file)
 #print ("hyperparam optimisation")
 #tune_rf(feature_df)
 
-#print ("hyperparam optimisation")
-#tune_rf_oversampling(feature_df)
-
-#print ("hyperparam optimisation")
-#tune_rf_group(feature_df)
-
-#print ("hyperparam optimisation")
-#tune_rf_group_oversampling_sublineages(train_data)
-
-#print ("hyperparam optimisation t5")
-#tune_rf_group_oversampling_t5(train_data)
-
-#print ("hyperparam optimisation lineages SMOTE")
-#tune_rf_group_smote(train_data)
-
-#print ("hyperparam optimisation lineages SMOTE")
-#tune_rf_group_smote_t5(train_data)
-
-#print ("hyperparam optimisation considering sub-lineages")
-#tune_rf_group(feature_df)
-
-#print ("SMOTE optimization grouped")
-#tune_rf_group_smote(feature_df)
+#HYPER-PARAMETER OPTIMIZATION
+#best_params_smote_t5 = tune_rf_group_oversampling(train_data, 'smote', 't5')
+#best_params_random_t5 = tune_rf_group_oversampling(train_data, 'random', 't5')
 
 
 #print ("cv rf")
 #final_res, final_imp, preds, labels = cross_model_balanced(train_data, label_df)
 #calc_accuracy(preds, labels)
 
-#final_res_grouped, final_imp_grouped, preds_grouped, labels_grouped = cross_model_balanced_sublineage(train_data, label_df)
-#calc_accuracy(preds_grouped, labels_grouped)
 
-final_res_t5, final_imp_t5, preds_t5, labels_t5 = cross_model_balanced_t5(train_data, label_df,'random')
+#Using t5 as block -
+final_res_t5, final_imp_t5, preds_t5, labels_t5 = cross_model_balanced_blocked(train_data, label_df,'random','t5')
 calc_accuracy(preds_t5, labels_t5)
+
+#Using sublineage as block
+#final_res_sublineage, final_imp_sublineage, preds_sublineage, labels_sublineage = cross_model_balanced_blocked(train_data, label_df,'random','t5')
+#calc_accuracy(preds_sublineage, labels_sublineage)
 
 
 #imp_fasta = create_fasta(final_imp)
