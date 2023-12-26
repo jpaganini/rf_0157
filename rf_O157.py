@@ -774,8 +774,8 @@ def cross_model_balanced_blocked(model_input, label_df,sampling,block_strategy):
 
     print(model.classes_)
 
-    # shap.summary_plot(shap_values[0], list_test_sets, feature_names=anns)
-    # shap.summary_plot(shap_values[1], list_test_sets,feature_names=anns)
+    shap.summary_plot(shap_values[0], list_test_sets, feature_names=anns)
+    shap.summary_plot(shap_values[1], list_test_sets,feature_names=anns)
     shap.summary_plot(shap_values[2], list_test_sets, feature_names=anns)
 
     # shap.summary_plot(shap_values[0], list_test_sets)
