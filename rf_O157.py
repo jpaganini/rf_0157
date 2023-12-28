@@ -66,10 +66,16 @@ def usage():
     sys.exit()
 
 def get_opts():
-    if len(sys.argv) != 5:
+    if len(sys.argv) != 6:
         usage()
     else:
-        return sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+        return sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+
+def get_opts_muvr():
+    if len(sys.argv) != 3:
+        usage()
+    else:
+        return sys.argv[1], sys.argv[2]
 
 def load_feat_ann(feature_file):
     label_kmer_df = pd.read_csv(feature_file, sep='\t')
@@ -141,33 +147,28 @@ def load_features(feature_file):
 
     return merge_pd
 
-def split_dataset(meta_file,feature_file):
+def split_dataset(meta_file):
         RSEED=50
         #Load the features table
-        label_kmer_df = pd.read_csv(feature_file, sep='\t', header=0, index_col=0)
-        label_kmer_df = label_kmer_df.drop('SYMP',axis=1)
+        #label_kmer_df = pd.read_csv(feature_file, sep='\t', header=0, index_col=0) - #REMOVED WHEN MUVR
+        #label_kmer_df = label_kmer_df.drop('SYMP',axis=1) - #REMOVED WHEN MUVR
 
         #load the metadata
         metadata = pd.read_csv(meta_file, sep='\t', header=0)
         metadata = metadata.set_index('SRA')
-        metadata=metadata.iloc[:,:16]
+        #metadata=metadata.iloc[:,:16] - #REMOVED WHEN MUVR
 
-        all_pd = pd.merge(label_kmer_df, metadata, left_index=True, right_index=True)
-
-        #all_pd = pd.read_csv(meta_file, sep='\t', header=0)
-        #all_pd = all_pd[['SRA', 'SYMP', 'LINEAGE', 'SNP ADDRESS']]
-        #Set the index to the SRA code
-        #all_pd = all_pd.set_index('SRA')
+        #all_pd = pd.merge(label_kmer_df, metadata, left_index=True, right_index=True) - #REMOVED WHEN MUVR
 
         #Create new dataframes for each sublineage
-        lineage_categories = all_pd['LINEAGE'].unique()
+        lineage_categories = metadata['LINEAGE'].unique()
             #Create an empty dictoniary to store the DataFrames
         lineage_dfs = {}
 
             # Iterate over each 'LINEAGE' category and create a separate DataFrame for each
         for lineage in lineage_categories:
-            mask = all_pd['LINEAGE'] == lineage
-            lineage_dfs[lineage] = all_pd[mask]
+            mask = metadata['LINEAGE'] == lineage
+            lineage_dfs[lineage] = metadata[mask]
 
         #Create an empty dictoniary to store the train-test splits
         train_test_splits={}
@@ -198,10 +199,10 @@ def split_dataset(meta_file,feature_file):
 
 #Combine all train and test data into a single dataset
         train_dfs=train_dfs = [split[0] for split in train_test_splits.values()]
-        final_train = pd.concat(train_dfs, ignore_index=True)
+        final_train = pd.concat(train_dfs, ignore_index=False)
 
         test_dfs = train_dfs = [split[1] for split in train_test_splits.values()]
-        final_test = pd.concat(test_dfs, ignore_index=True)
+        final_test = pd.concat(test_dfs, ignore_index=False)
 
         #THIS WILL BE REMOVED===============
         filtered_train = final_train[final_train['SYMP'] == 'HUS']
@@ -238,9 +239,61 @@ def split_dataset(meta_file,feature_file):
             else:
                 print(f"Column {column} not found in the DataFrame.\n")
 
-        #UNTIL HERE======================
+        final_train.to_csv(r'2023_train_set_jp.tsv', sep='\t')
+        final_test.to_csv(r'2023_test_set_jp.tsv', sep='\t')
 
         return final_train, final_test
+
+def prepare_data_muvr(train_data):
+
+    train_data_df = pd.read_csv(train_data, sep='\t', header=0, index_col=0)
+
+    train_data_muvr = train_data_df.sort_index().drop_duplicates(subset=['t5', 'SYMP'],
+                                                       keep='last')  # remove samples that contain a +
+
+    train_data_muvr.to_csv(r'2023_train_data_filtered.tsv', sep='\t')
+
+    return train_data_muvr
+
+def feature_reduction(train_data_muvr,chisq_file):
+
+    train_data_muvr = pd.read_csv(train_data_muvr, sep='\t', header=0, index_col=0)
+
+    chisq_features_df = pd.read_csv(chisq_file, sep='\t', header=0, index_col=0)
+
+    model_input = pd.merge(train_data_muvr['SYMP'], chisq_features_df, left_index=True, right_index=True)
+
+    to_predict = ['SYMP']
+
+    X_muvr = model_input.drop('SYMP', axis = 1).to_numpy()
+    y_muvr = model_input['SYMP'].values.ravel()
+
+    feature_names = model_input.drop(columns=["SYMP"]).columns
+
+
+    feature_selector = FeatureSelector(
+        n_repetitions=10,
+        n_outer=5,
+        n_inner=4,
+        estimator="RFC",
+        metric="MISS",
+        features_dropout_rate=0.9
+    )
+
+    feature_selector.fit(X_muvr, y_muvr)
+    selected_features = feature_selector.get_selected_features(feature_names=feature_names)
+
+    # Obtain a dataframe containing MUVR selected features
+    df_muvr_min = model_input[to_predict+list(selected_features.min)]
+    df_muvr_mid = model_input[to_predict+list(selected_features.mid)]
+    df_muvr_max = model_input[to_predict+list(selected_features.max)]
+
+    df_muvr_min.to_csv(r'2023_jp_muvr_min.tsv', sep='\t')
+    df_muvr_mid.to_csv(r'2023_jp_muvr_mid.tsv', sep='\t')
+    df_muvr_max.to_csv(r'2023_jp_muvr_max.tsv', sep='\t')
+
+    return df_muvr_max
+
 
 def simple_rf(label_kmer_df):
 
@@ -302,39 +355,6 @@ def simple_rf(label_kmer_df):
 
     visualizer.show(outpath='confusion_matrix_model_1') 
 
-def feature_reduction(model_input):
-
-    to_predict = ["SYMP"]
-    #executor = ProcessPoolExecutor(max_workers=6)
-
-    X_muvr = model_input.drop('SYMP', axis = 1).to_numpy()
-    y_muvr = model_input['SYMP'].values.ravel()
-
-    feature_names = model_input.drop(columns=["SYMP"]).columns
-
-
-    feature_selector = FeatureSelector(
-        n_repetitions=10,
-        n_outer=5,
-        n_inner=4,
-        estimator="RFC",  
-        metric="MISS",
-        features_dropout_rate=0.9
-    )
-
-    feature_selector.fit(X_muvr, y_muvr)
-    selected_features = feature_selector.get_selected_features(feature_names=feature_names)
-
-    # Obtain a dataframe containing MUVR selected features
-    df_muvr_min = model_input[to_predict+list(selected_features.min)]
-    df_muvr_mid = model_input[to_predict+list(selected_features.mid)]
-    df_muvr_max = model_input[to_predict+list(selected_features.max)]
-
-    df_muvr_min.to_csv(r'df_muvr_min_2017d_merged.tsv', sep='\t')
-    df_muvr_mid.to_csv(r'df_muvr_mid_2017d_merged.tsv', sep='\t')
-    df_muvr_max.to_csv(r'df_muvr_max_2017d_merged.tsv', sep='\t')
-
-    return df_muvr_max
 
 
 def tune_rf(model_input):
@@ -940,19 +960,32 @@ def calc_accuracy(preds, labels):
 
 ################ MAIN ##############
 
+#get all opts - this will have to be modified
+#feature_file, ann_file, meta_file, val_file, chisq_file = get_opts()
 
-feature_file, ann_file, meta_file, val_file = get_opts()
+#create a train-test split - considering population structre and blocking hihgly similar isoaltes to avoid data-leakage
+#train_data,validation_data=split_dataset(meta_file,feature_file)
+#train_data,validation_data=split_dataset(meta_file)
 
-train_data,validation_data=split_dataset(meta_file,feature_file)
+#Create a sub-set of the train set, which will be used for doing muvr.
+    #In this subset, only one isolate within the same t5 cluster are retained
+#train_data_muvr=prepare_data_muvr(train_data)
 
-#print ("load training data")
+#Import data for MUVR step
+train_data_muvr, chisq_file = get_opts_muvr()
+
+#print ("MUVR feature reduction")
+feature_df = feature_reduction(train_data_muvr, chisq_file)
+
+
+print ("load training data")
 #feature_df = load_features(train_data)
 
 #print ("load validation data")
 #val_df = load_features(val_file, meta_file,"V")
 
 #print ("load feature annotation")
-label_df = load_feat_ann(ann_file)
+#label_df = load_feat_ann(ann_file)
 
 #print ("feature reduction")
 #feature_df = feature_reduction(feature_df)
@@ -975,8 +1008,8 @@ label_df = load_feat_ann(ann_file)
 
 
 #Using t5 as block -
-final_res_t5, final_imp_t5, preds_t5, labels_t5 = cross_model_balanced_blocked(train_data, label_df,'random','t5')
-calc_accuracy(preds_t5, labels_t5)
+#final_res_t5, final_imp_t5, preds_t5, labels_t5 = cross_model_balanced_blocked(train_data, label_df,'random','t5')
+#calc_accuracy(preds_t5, labels_t5)
 
 #Using sublineage as block
 #final_res_sublineage, final_imp_sublineage, preds_sublineage, labels_sublineage = cross_model_balanced_blocked(train_data, label_df,'random','t5')
