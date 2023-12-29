@@ -3,62 +3,65 @@
 # Stats
 import numpy as np
 import random 
-from collections import Counter
-import itertools
-from scipy import interp
-from itertools import cycle
+#from collections import Counter
+#import itertools
+#from scipy import interp
+#from itertools import cycle
 import sys
-import math
+#import math
 
 # pandas
 import pandas as pd
 
+#dask dataframes for large files manipulation
+import dask.dataframe as dd
+
 # visualisation
 import matplotlib.pyplot as plt
-import seaborn as sns
-from IPython.display import Image
-from subprocess import call
-from sklearn.tree import export_graphviz
-import pydot
-from yellowbrick.model_selection import FeatureImportances
-from sklearn.linear_model import Lasso
+#import seaborn as sns
+#from IPython.display import Image
+#from subprocess import call
+#from sklearn.tree import export_graphviz
+#import pydot
+#from yellowbrick.model_selection import FeatureImportances
+#from sklearn.linear_model import Lasso
 
 # modelling 
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import LeaveOneGroupOut
-from sklearn.model_selection import StratifiedGroupKFold
-from sklearn.model_selection import GroupKFold
-from sklearn.preprocessing import label_binarize
-from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import OneHotEncoder
+#from sklearn.model_selection import train_test_split
+#from sklearn.ensemble import RandomForestClassifier
+#from sklearn.model_selection import LeaveOneGroupOut
+#from sklearn.model_selection import StratifiedGroupKFold
+#from sklearn.model_selection import GroupKFold
+#from sklearn.preprocessing import label_binarize
+#from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
+#from sklearn.preprocessing import StandardScaler
+#from sklearn.preprocessing import OneHotEncoder
 
 
 # model evaluation
-from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, f1_score
-from sklearn.metrics import roc_curve, auc,  RocCurveDisplay
-from yellowbrick.classifier import ClassificationReport, ROCAUC, ClassBalance,  ConfusionMatrix
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-from sklearn.metrics import classification_report
+#from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, f1_score
+#from sklearn.metrics import roc_curve, auc,  RocCurveDisplay
+#from yellowbrick.classifier import ClassificationReport, ROCAUC, ClassBalance,  ConfusionMatrix
+#from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+#from sklearn.metrics import classification_report
 
 # cross validation 
-from sklearn.model_selection import RandomizedSearchCV
-from sklearn.metrics import confusion_matrix
-from sklearn.model_selection import StratifiedKFold
-from yellowbrick.model_selection import CVScores
-from yellowbrick.model_selection import RFECV
-from sklearn.model_selection import cross_val_score
+#from sklearn.model_selection import RandomizedSearchCV
+#from sklearn.metrics import confusion_matrix
+#from sklearn.model_selection import StratifiedKFold
+#from yellowbrick.model_selection import CVScores
+#from yellowbrick.model_selection import RFECV
+#from sklearn.model_selection import cross_val_score
 
-from imblearn.over_sampling import RandomOverSampler
-from imblearn.pipeline import Pipeline
-from imblearn.over_sampling import SMOTE
+#from imblearn.over_sampling import RandomOverSampler
+#from imblearn.pipeline import Pipeline
+#from imblearn.over_sampling import SMOTE
 
 ###### ------- MUVR ------- ######
 from py_muvr.feature_selector import FeatureSelector
-from concurrent.futures import ProcessPoolExecutor
+#from concurrent.futures import ProcessPoolExecutor
 
-import shap
+#import shap
 
 
 def usage():
@@ -257,11 +260,16 @@ def prepare_data_muvr(train_data):
 
 def feature_reduction(train_data_muvr,chisq_file):
 
-    train_data_muvr = pd.read_csv(train_data_muvr, sep='\t', header=0, index_col=0)
+    train_data_muvr = dd.read_csv(train_data_muvr, sep='\t')
+    train_data_muvr= train_data_muvr.set_index('SRA')
+    columns_to_drop = ['MOLIS', 'LINEAGE','STX','SNP ADDRESS','t5','SYMP H/L']  # Replace with the actual column names
+    train_data_muvr = train_data_muvr.drop(columns=columns_to_drop)
 
-    chisq_features_df = pd.read_csv(chisq_file, sep='\t', header=0, index_col=0)
+    chisq_features_df = dd.read_csv(chisq_file, sep='\t')
+    chisq_features_df = chisq_features_df.set_index('Unnamed: 0')
 
-    model_input = pd.merge(train_data_muvr['SYMP'], chisq_features_df, left_index=True, right_index=True)
+    model_input = dd.merge(train_data_muvr, chisq_features_df, how='inner', left_index=True, right_index=True)
+    model_input = model_input.compute()
 
     to_predict = ['SYMP']
 
