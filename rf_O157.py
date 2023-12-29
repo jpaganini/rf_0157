@@ -13,6 +13,9 @@ import sys
 # pandas
 import pandas as pd
 
+#dask dataframes for large files manipulation
+import dask.dataframe as dd
+
 # visualisation
 import matplotlib.pyplot as plt
 #import seaborn as sns
@@ -257,11 +260,16 @@ def prepare_data_muvr(train_data):
 
 def feature_reduction(train_data_muvr,chisq_file):
 
-    train_data_muvr = pd.read_csv(train_data_muvr, sep='\t', header=0, index_col=0)
+    train_data_muvr = dd.read_csv(train_data_muvr, sep='\t')
+    train_data_muvr= train_data_muvr.set_index('SRA')
+    columns_to_drop = ['MOLIS', 'LINEAGE','STX','SNP ADDRESS','t5','SYMP H/L']  # Replace with the actual column names
+    train_data_muvr = train_data_muvr.drop(columns=columns_to_drop)
 
-    chisq_features_df = pd.read_csv(chisq_file, sep='\t', header=0, index_col=0)
+    chisq_features_df = dd.read_csv(chisq_file, sep='\t')
+    chisq_features_df = chisq_features_df.set_index('Unnamed: 0')
 
-    model_input = pd.merge(train_data_muvr['SYMP'], chisq_features_df, left_index=True, right_index=True)
+    model_input = dd.merge(train_data_muvr, chisq_features_df, how='inner', left_index=True, right_index=True)
+    model_input = model_input.compute()
 
     to_predict = ['SYMP']
 
