@@ -260,16 +260,38 @@ def prepare_data_muvr(train_data):
 
 def feature_reduction(train_data_muvr,chisq_file):
 
-    train_data_muvr = dd.read_csv(train_data_muvr, sep='\t')
+    train_data_muvr = pd.read_csv(train_data_muvr, sep='\t', header=0)
     train_data_muvr= train_data_muvr.set_index('SRA')
     columns_to_drop = ['MOLIS', 'LINEAGE','STX','SNP ADDRESS','t5','SYMP H/L']  # Replace with the actual column names
     train_data_muvr = train_data_muvr.drop(columns=columns_to_drop)
 
-    chisq_features_df = dd.read_csv(chisq_file, sep='\t')
-    chisq_features_df = chisq_features_df.set_index('Unnamed: 0')
+    # Create an iterator for reading chisq_features line by line
+    reader_chisq = pd.read_csv(chisq_file, sep='\t', header=0, iterator=True, chunksize=1)
 
-    model_input = dd.merge(train_data_muvr, chisq_features_df, how='inner', left_index=True, right_index=True)
-    model_input = model_input.compute()
+    # Create a dataframe to hold the results
+    model_input = pd.DataFrame()
+
+    # Get the first line of chisq_features
+    try:
+        chunk_chisq = next(reader_chisq)
+    except StopIteration:
+        chunk_chisq = pd.DataFrame()
+
+    while not chunk_chisq.empty:
+        # Set the index as the first column
+        chunk_chisq.set_index(chunk_chisq.columns[0], inplace=True)
+        chunk_chisq = chunk_chisq.astype("int8")
+
+        # Merge the current line with isolate_metadata based on your desired criteria
+        merged_line = pd.merge(train_data_muvr, chunk_chisq, left_index=True, right_index=True, how='inner')
+        #print(merged_line)
+        model_input = pd.concat([model_input, merged_line], ignore_index=False)
+
+        #Get the following lines of the dataframe
+        try:
+            chunk_chisq = next(reader_chisq)
+        except StopIteration:
+            chunk_chisq = pd.DataFrame()
 
     to_predict = ['SYMP']
 
@@ -295,6 +317,8 @@ def feature_reduction(train_data_muvr,chisq_file):
     df_muvr_min = model_input[to_predict+list(selected_features.min)]
     df_muvr_mid = model_input[to_predict+list(selected_features.mid)]
     df_muvr_max = model_input[to_predict+list(selected_features.max)]
+
+    print('something')
 
     df_muvr_min.to_csv(r'2023_jp_muvr_min.tsv', sep='\t')
     df_muvr_mid.to_csv(r'2023_jp_muvr_mid.tsv', sep='\t')
