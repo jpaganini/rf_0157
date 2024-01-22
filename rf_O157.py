@@ -318,8 +318,7 @@ def feature_reduction(train_data_muvr,chisq_file):
     df_muvr_mid = model_input[to_predict+list(selected_features.mid)]
     df_muvr_max = model_input[to_predict+list(selected_features.max)]
 
-    print('something')
-
+    
     df_muvr_min.to_csv(r'2023_jp_muvr_min.tsv', sep='\t')
     df_muvr_mid.to_csv(r'2023_jp_muvr_mid.tsv', sep='\t')
     df_muvr_max.to_csv(r'2023_jp_muvr_max.tsv', sep='\t')
