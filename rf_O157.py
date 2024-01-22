@@ -80,6 +80,11 @@ def get_opts_muvr():
     else:
         return sys.argv[1], sys.argv[2]
 
+def get_opts_extract():
+    if len(sys.argv) != 5:
+        usage()
+    else:
+        return sys.argv[1], sys.argv[2], sys.argv[3],sys.argv[4]
 def load_feat_ann(feature_file):
     label_kmer_df = pd.read_csv(feature_file, sep='\t')
     return label_kmer_df
@@ -325,6 +330,26 @@ def feature_reduction(train_data_muvr,chisq_file):
     df_muvr_max.to_csv(r'2023_jp_muvr_max.tsv', sep='\t')
 
     return df_muvr_max
+
+def feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file):
+    min_features_columns = pd.read_csv(min_muvr_filtered_file, sep='\t', header=0, index_col=0).columns[1:].tolist()
+    mid_features_columns = pd.read_csv(mid_muvr_filtered_file, sep='\t', header=0, index_col=0).columns[1:].tolist()
+    max_features_columns = pd.read_csv(max_muvr_filtered_file, sep='\t', header=0, index_col=0).columns[1:].tolist()
+
+    #Get column names
+    min_features_columns = ['Unnamed: 0'] + min_features_columns
+    mid_features_columns = ['Unnamed: 0'] + mid_features_columns
+    max_features_columns = ['Unnamed: 0'] + max_features_columns
+
+    #Get data from chisq file
+    min_chisq_data = pd.read_csv(chisq_file, sep='\t', header=0, index_col=0, usecols=min_features_columns)
+    mid_chisq_data = pd.read_csv(chisq_file, sep='\t', header=0, index_col=0, usecols=mid_features_columns)
+    max_chisq_data = pd.read_csv(chisq_file, sep='\t', header=0, index_col=0, usecols=max_features_columns)
+
+
+    min_chisq_data.to_csv(r'2023_jp_complete_muvr_min.tsv', sep='\t')
+    mid_chisq_data.to_csv(r'2023_jp_complete_muvr_mid.tsv', sep='\t')
+    max_chisq_data.to_csv(r'2023_jp_complete_muvr_max.tsv', sep='\t')
 
 
 def simple_rf(label_kmer_df):
@@ -1003,14 +1028,18 @@ def calc_accuracy(preds, labels):
     #In this subset, only one isolate within the same t5 cluster are retained
 #train_data_muvr=prepare_data_muvr(train_data)
 
-#Import data for MUVR step
-train_data_muvr, chisq_file = get_opts_muvr()
-
+#======MUVR step =====#
+#train_data_muvr, chisq_file = get_opts_muvr()
 #print ("MUVR feature reduction")
-feature_df = feature_reduction(train_data_muvr, chisq_file)
+#feature_df = feature_reduction(train_data_muvr, chisq_file)
+#===========
 
-
-print ("load training data")
+#-====FEATURE EXTRACTION STEP =====
+###In this step, we will extract relevant features from all samples
+min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file = get_opts_extract()
+feature_df = feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file)
+#=========
+#print ("load training data")
 #feature_df = load_features(train_data)
 
 #print ("load validation data")
