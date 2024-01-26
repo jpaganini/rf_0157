@@ -55,8 +55,8 @@ from imblearn.pipeline import Pipeline
 from imblearn.over_sampling import SMOTE
 
 ###### ------- MUVR ------- ######
-#from py_muvr.feature_selector import FeatureSelector
-#from concurrent.futures import ProcessPoolExecutor
+from py_muvr.feature_selector import FeatureSelector
+from concurrent.futures import ProcessPoolExecutor
 
 import shap
 
@@ -1017,9 +1017,9 @@ feature_df = feature_reduction(train_data_muvr, chisq_file)
 
 #5. LOAD AND WRANGLE TRAIN DATA FOR RF
 #print ("load training data")
-feature_file, train_meta_file, test_meta_file, ann_file= get_opts_rf()
-train_data = load_features(feature_file, train_meta_file)
-label_df=load_feat_ann(ann_file)
+#feature_file, train_meta_file, test_meta_file, ann_file= get_opts_rf()
+#train_data = load_features(feature_file, train_meta_file)
+#label_df=load_feat_ann(ann_file)
 
 #6. HYPER-PARAMETER OPTIMIZATION RF
 #best_params_random_t5 = tune_rf_group_oversampling(train_data, 'random', 't5')
