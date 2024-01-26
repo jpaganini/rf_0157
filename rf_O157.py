@@ -3,18 +3,15 @@
 # Stats
 import numpy as np
 import random 
-#from collections import Counter
-#import itertools
-#from scipy import interp
-#from itertools import cycle
+from collections import Counter
+import itertools
+from scipy import interp
+from itertools import cycle
 import sys
-#import math
+import math
 
 # pandas
 import pandas as pd
-
-#dask dataframes for large files manipulation
-import dask.dataframe as dd
 
 # visualisation
 import matplotlib.pyplot as plt
@@ -27,52 +24,47 @@ import matplotlib.pyplot as plt
 #from sklearn.linear_model import Lasso
 
 # modelling 
-#from sklearn.model_selection import train_test_split
-#from sklearn.ensemble import RandomForestClassifier
-#from sklearn.model_selection import LeaveOneGroupOut
-#from sklearn.model_selection import StratifiedGroupKFold
-#from sklearn.model_selection import GroupKFold
-#from sklearn.preprocessing import label_binarize
-#from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
-#from sklearn.preprocessing import StandardScaler
-#from sklearn.preprocessing import OneHotEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import LeaveOneGroupOut
+from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.model_selection import GroupKFold
+from sklearn.preprocessing import label_binarize
+from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OneHotEncoder
 
 
 # model evaluation
-#from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, f1_score
-#from sklearn.metrics import roc_curve, auc,  RocCurveDisplay
-#from yellowbrick.classifier import ClassificationReport, ROCAUC, ClassBalance,  ConfusionMatrix
-#from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-#from sklearn.metrics import classification_report
+from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, f1_score
+from sklearn.metrics import roc_curve, auc,  RocCurveDisplay
+from yellowbrick.classifier import ClassificationReport, ROCAUC, ClassBalance,  ConfusionMatrix
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import classification_report
 
 # cross validation 
-#from sklearn.model_selection import RandomizedSearchCV
-#from sklearn.metrics import confusion_matrix
-#from sklearn.model_selection import StratifiedKFold
-#from yellowbrick.model_selection import CVScores
-#from yellowbrick.model_selection import RFECV
-#from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import StratifiedKFold
+from yellowbrick.model_selection import CVScores
+from yellowbrick.model_selection import RFECV
+from sklearn.model_selection import cross_val_score
 
-#from imblearn.over_sampling import RandomOverSampler
-#from imblearn.pipeline import Pipeline
-#from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import RandomOverSampler
+from imblearn.pipeline import Pipeline
+from imblearn.over_sampling import SMOTE
 
 ###### ------- MUVR ------- ######
-from py_muvr.feature_selector import FeatureSelector
+#from py_muvr.feature_selector import FeatureSelector
 #from concurrent.futures import ProcessPoolExecutor
 
-#import shap
+import shap
 
 
 def usage():
 
     sys.exit()
 
-def get_opts():
-    if len(sys.argv) != 6:
-        usage()
-    else:
-        return sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 
 def get_opts_muvr():
     if len(sys.argv) != 3:
@@ -85,46 +77,28 @@ def get_opts_extract():
         usage()
     else:
         return sys.argv[1], sys.argv[2], sys.argv[3],sys.argv[4]
+
+def get_opts_rf():
+    if len(sys.argv) != 5:
+        usage()
+    else:
+        return sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+
 def load_feat_ann(feature_file):
     label_kmer_df = pd.read_csv(feature_file, sep='\t')
     return label_kmer_df
 
-def load_features(feature_file):
+def load_features(feature_file,meta_file):
     
     print ("load feature file")
-    label_kmer_df = pd.read_csv(feature_file, sep='\t', header=0, index_col=0)
+    kmer_df = pd.read_csv(feature_file, sep='\t', header=0, index_col=0)
 
-    try:
-        label_kmer_df = label_kmer_df.set_index('SRA')
-    except:
-        print ("index not found")
-    try:
-        label_kmer_df= label_kmer_df.drop('SYMP', axis = 1)
-    except:
-        print ("label not found")
+    print ("load metadata file")
+    metadata = pd.read_csv(meta_file, sep='\t', header=0, index_col=0)
 
-    print ("load meta file")
+    print("merging data")
+    merge_pd =pd.merge(kmer_df,metadata, left_index=True, right_index=True)
 
-
-
-    if flag == 'T':
-        all_pd = pd.read_csv(meta_file, sep='\t', header=0)
-        all_pd = all_pd[['SRA', 'SYMP','LINEAGE','t5']]
-        all_pd = all_pd.set_index('SRA')
-        all_pd = pd.concat([all_pd, all_pd['SNP ADDRESS'].str.split('.', expand=True)], axis=1)
-        all_pd = all_pd.sort_values('SRA').drop_duplicates(subset=[5, 'SYMP'], keep='last') #remove samples that contain a +
-        all_pd = all_pd[['SYMP','LINEAGE']]
-
-    else:
-        all_pd = pd.read_csv(meta_file, sep='\t', header=0)
-        all_pd = all_pd[['SRA', 'SYMP','LINEAGE']]
-        all_pd = all_pd.set_index('SRA')
-
-    print ("merge features and meta data")
-
-    merge_pd =pd.merge(label_kmer_df,all_pd, left_index=True, right_index=True)
-    symptom_counts_train = merge_pd['SYMP'].value_counts()
-    print('Symptomps count training', symptom_counts_train)
 
 
     #merge_pd.loc[merge_pd['SYMP'] == 'HUS', 'SYMP'] = 'BD'
@@ -310,7 +284,7 @@ def feature_reduction(train_data_muvr,chisq_file):
         n_repetitions=10,
         n_outer=5,
         n_inner=4,
-        estimator="RFC",
+        estimator="XGBC",
         metric="MISS",
         features_dropout_rate=0.9
     )
@@ -459,7 +433,7 @@ def tune_rf_group_oversampling(model_input, sampling, block_strategy):
     RSEED = 50
 
     train_labels = np.array(model_input['SYMP'])
-    train= model_input.iloc[:, :-16]
+    train= model_input.iloc[:, :-7]
 
     #Model
     model = RandomForestClassifier()
@@ -476,7 +450,7 @@ def tune_rf_group_oversampling(model_input, sampling, block_strategy):
     max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
     # print (max_depth)
     # max_depth.append(None)
-
+    k_neighbors = [1,2,3,4]
     #Create a imblearn Pipeline to tune hyper-parameters with oversampling included
 
 
@@ -512,7 +486,6 @@ def tune_rf_group_oversampling(model_input, sampling, block_strategy):
         ])
 
     if sampling == 'none':
-        oversampler = SMOTE(random_state=RSEED)
         # create random grid
         random_grid = {
             'model__n_estimators': n_estimators,
@@ -737,7 +710,7 @@ def cross_model_balanced_blocked(model_input, label_df,sampling,block_strategy):
 
     #1. Import the data
     all_labels = np.array(model_input['SYMP'])
-    features= model_input.iloc[:,:-16]
+    features= model_input.iloc[:,:-7]
 
 
     #set up the random seed
@@ -773,25 +746,25 @@ def cross_model_balanced_blocked(model_input, label_df,sampling,block_strategy):
     for x in range(len(cv_iterator)):
         test = model_input.iloc[cv_iterator[x][1]]
         samples = test.index.values.tolist()
-        test_features = test.iloc[:,:-16]
+        test_features = test.iloc[:,:-7]
         test_labels = test['SYMP'].values.ravel()
 
         train = model_input.iloc[cv_iterator[x][0]]
-        train_features = train.iloc[:,:-16]
+        train_features = train.iloc[:,:-7]
         train_labels = train['SYMP'].values.ravel()
 
         if sampling=='random':
             features_resampled, labels_resampled = RandomOverSampler(random_state=RSEED).fit_resample(train_features,train_labels)
-            model = RandomForestClassifier(n_estimators=733,
+            model = RandomForestClassifier(n_estimators=822,
+                                           random_state=RSEED,
+                                           max_features='sqrt',
+                                           n_jobs=-1, verbose=1, max_depth=220)
+        if sampling=='smote':
+            features_resampled, labels_resampled = SMOTE(random_state=RSEED,k_neighbors=1).fit_resample(train_features,train_labels)
+            model = RandomForestClassifier(n_estimators=377,
                                            random_state=RSEED,
                                            max_features='sqrt',
                                            n_jobs=-1, verbose=1, max_depth=300)
-        if sampling=='smote':
-            features_resampled, labels_resampled = SMOTE(random_state=RSEED,k_neighbors=2).fit_resample(train_features,train_labels)
-            model = RandomForestClassifier(n_estimators=644,
-                                           random_state=RSEED,
-                                           max_features='sqrt',
-                                           n_jobs=-1, verbose=1, max_depth=460)
 
         model.fit(features_resampled, labels_resampled)
         # test the model on test data
@@ -831,29 +804,29 @@ def cross_model_balanced_blocked(model_input, label_df,sampling,block_strategy):
     print(sum(acc_muvr_max) / len(acc_muvr_max))
 
     # outputs commented out
-    #final_res.to_csv(r'final_pred_grouped_test.tsv', sep='\t')
-    #final_imp['average'] = final_imp.mean(numeric_only=True, axis=1)
-    #final_imp = final_imp.sort_values('average', ascending=False)
-    #final_imp.to_csv(r'final_grouped_test.tsv', sep='\t')
+    #final_res.to_csv(r'2023_jp_pred_CV_smote_t5_max.tsv', sep='\t')
+    final_imp['average'] = final_imp.mean(numeric_only=True, axis=1)
+    final_imp = final_imp.sort_values('average', ascending=False)
+    #final_imp.to_csv(r'2023_jp_feat_importance_CV_smote_t5_max.tsv', sep='\t')
 
     #   combining results from all iterations
-    shap_values = np.array(list_shap_values[0])
-    for i in range(1, len(list_shap_values)):
-        shap_values = np.concatenate((shap_values, np.array(list_shap_values[i])), axis=1)
+    #shap_values = np.array(list_shap_values[0])
+    #for i in range(1, len(list_shap_values)):
+    #    shap_values = np.concatenate((shap_values, np.array(list_shap_values[i])), axis=1)
 
     # print shap uncomment
-    label_dict = dict(zip(label_df['Sequence'], label_df['ANN']))
-    fest = list_test_sets.columns.values.tolist()
+    #label_dict = dict(zip(label_df['Sequence'], label_df['ANN']))
+    #fest = list_test_sets.columns.values.tolist()
 
-    anns = []
-    for f in fest:
-        anns.append(label_dict[f])
+    #anns = []
+    #for f in fest:
+    #    anns.append(label_dict[f])
 
-    print(model.classes_)
+    #print(model.classes_)
 
-    shap.summary_plot(shap_values[0], list_test_sets, feature_names=anns)
-    shap.summary_plot(shap_values[1], list_test_sets,feature_names=anns)
-    shap.summary_plot(shap_values[2], list_test_sets, feature_names=anns)
+    #shap.summary_plot(shap_values[0], list_test_sets, feature_names=anns)
+    #shap.summary_plot(shap_values[1], list_test_sets,feature_names=anns)
+    #shap.summary_plot(shap_values[2], list_test_sets, feature_names=anns)
 
     # shap.summary_plot(shap_values[0], list_test_sets)
     # shap.summary_plot(shap_values[1], list_test_sets)
@@ -991,7 +964,7 @@ def cross_model_balanced_sublineage(model_input, label_df):
 def create_fasta(final_imp):
     features =  final_imp.index.values.tolist()
     #print (features)
-    with open('features_2023_new.fasta', 'w') as f:
+    with open('features_2023_jp_random_max.fasta', 'w') as f:
         for x, feat in enumerate(features):
             f.write('>Feature'+str(x+1))
             f.write('\n')
@@ -1002,7 +975,12 @@ def calc_accuracy(preds, labels):
     report_ = classification_report(
             digits=6,
             y_true= labels, 
-            y_pred= preds)
+            y_pred= preds,
+            output_dict=True)
+
+    classification_report_df = pd.DataFrame(report_).transpose()
+    classification_report_df.to_csv(r'2023_jp_classification_report_CV_smote_t5_max.tsv', sep='\t')
+
     print('Classification Report Training Data: ' ,
           report_)
     cm = confusion_matrix(labels, preds, labels=['BD','D','HUS'])
@@ -1020,28 +998,42 @@ def calc_accuracy(preds, labels):
 #get all opts - this will have to be modified
 #feature_file, ann_file, meta_file, val_file, chisq_file = get_opts()
 
-#create a train-test split - considering population structre and blocking hihgly similar isoaltes to avoid data-leakage
-#train_data,validation_data=split_dataset(meta_file,feature_file)
+#1. create a train-test split - considering population structre and blocking hihgly similar isoaltes to avoid data-leakage
 #train_data,validation_data=split_dataset(meta_file)
 
-#Create a sub-set of the train set, which will be used for doing muvr.
+#2. Create a sub-set of the train set, which will be used for doing muvr.
     #In this subset, only one isolate within the same t5 cluster are retained
 #train_data_muvr=prepare_data_muvr(train_data)
 
-#======MUVR step =====#
-#train_data_muvr, chisq_file = get_opts_muvr()
+#3. MUVR step
+ #This will have to be run on an HPC (size of chisq_file=4GBs)
+train_data_muvr, chisq_file= get_opts_muvr()
 #print ("MUVR feature reduction")
-#feature_df = feature_reduction(train_data_muvr, chisq_file)
-#===========
+feature_df = feature_reduction(train_data_muvr, chisq_file)
 
-#-====FEATURE EXTRACTION STEP =====
-###In this step, we will extract relevant features from all samples
-min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file = get_opts_extract()
-feature_df = feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file)
-#=========
+#4. FEATURE EXTRACTION STEP
+    #Extract relevant features from all samples
+#min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file = get_opts_extract()
+#feature_df = feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file)
+
+#5. LOAD AND WRANGLE TRAIN DATA FOR RF
 #print ("load training data")
-#feature_df = load_features(train_data)
+feature_file, train_meta_file, test_meta_file, ann_file= get_opts_rf()
+train_data = load_features(feature_file, train_meta_file)
+label_df=load_feat_ann(ann_file)
 
+#6. HYPER-PARAMETER OPTIMIZATION RF
+#best_params_random_t5 = tune_rf_group_oversampling(train_data, 'random', 't5')
+#best_params_smote_t5 = tune_rf_group_oversampling(train_data, 'smote', 't5')
+
+#7. EVALUATE RF WITH TRAINING DATA - T5 BLOCKING
+#final_res_t5, final_imp_t5, preds_t5, labels_t5 = cross_model_balanced_blocked(train_data, label_df,'random','t5')
+#calc_accuracy(preds_t5, labels_t5)
+
+#8. EXTRACT IMPORTANT FEATURES AS FASTA FILE
+#imp_fasta = create_fasta(final_imp_t5)
+
+#9. EVALUATE RF WITH TEST DATA - T5 BLOCKING
 #print ("load validation data")
 #val_df = load_features(val_file, meta_file,"V")
 
@@ -1054,14 +1046,6 @@ feature_df = feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, 
 #print ("simple rf")
 #simple_rf(feature_df)
 
-#Check hyper-parameters optimization
-#print ("hyperparam optimisation")
-#tune_rf(feature_df)
-
-#HYPER-PARAMETER OPTIMIZATION
-#best_params_smote_t5 = tune_rf_group_oversampling(train_data, 'smote', 't5')
-#best_params_random_t5 = tune_rf_group_oversampling(train_data, 'random', 't5')
-
 
 #print ("cv rf")
 #final_res, final_imp, preds, labels = cross_model_balanced(train_data, label_df)
@@ -1069,8 +1053,7 @@ feature_df = feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, 
 
 
 #Using t5 as block -
-#final_res_t5, final_imp_t5, preds_t5, labels_t5 = cross_model_balanced_blocked(train_data, label_df,'random','t5')
-#calc_accuracy(preds_t5, labels_t5)
+
 
 #Using sublineage as block
 #final_res_sublineage, final_imp_sublineage, preds_sublineage, labels_sublineage = cross_model_balanced_blocked(train_data, label_df,'random','t5')
