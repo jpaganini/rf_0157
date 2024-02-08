@@ -55,8 +55,8 @@ from imblearn.pipeline import Pipeline
 from imblearn.over_sampling import SMOTE
 
 ###### ------- MUVR ------- ######
-#from py_muvr.feature_selector import FeatureSelector
-#from concurrent.futures import ProcessPoolExecutor
+from py_muvr.feature_selector import FeatureSelector
+from concurrent.futures import ProcessPoolExecutor
 
 import shap
 
@@ -67,10 +67,11 @@ def usage():
 
 
 def get_opts_muvr():
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 4:
         usage()
     else:
-        return sys.argv[1], sys.argv[2]
+        return sys.argv[1], sys.argv[2], sys.argv[3]
+
 
 def get_opts_extract():
     if len(sys.argv) != 5:
@@ -237,7 +238,7 @@ def prepare_data_muvr(train_data):
 
     return train_data_muvr
 
-def feature_reduction(train_data_muvr,chisq_file):
+def feature_reduction(train_data_muvr,chisq_file, model):
 
     train_data_muvr = pd.read_csv(train_data_muvr, sep='\t', header=0)
     train_data_muvr= train_data_muvr.set_index('SRA')
@@ -277,6 +278,22 @@ def feature_reduction(train_data_muvr,chisq_file):
     X_muvr = model_input.drop('SYMP', axis = 1).to_numpy()
     y_muvr = model_input['SYMP'].values.ravel()
 
+    if model=='XGBC':
+        encoder = OneHotEncoder(sparse=False)
+
+    # Reshape y to a 2D array as fit_transform expects a 2D array
+        y_encoded = encoder.fit_transform(np.array(y_muvr).reshape(-1, 1))
+        y_variable = y_encoded
+
+    elif model=='RFC':
+        y_variable = y_muvr
+
+    else:
+        print ("Select a valid model: RFC or XBGC")
+        SystemExit
+
+
+
     feature_names = model_input.drop(columns=["SYMP"]).columns
 
 
@@ -284,12 +301,12 @@ def feature_reduction(train_data_muvr,chisq_file):
         n_repetitions=10,
         n_outer=5,
         n_inner=4,
-        estimator="XGBC",
+        estimator=model,
         metric="MISS",
         features_dropout_rate=0.9
     )
 
-    feature_selector.fit(X_muvr, y_muvr)
+    feature_selector.fit(X_muvr, y_variable)
     selected_features = feature_selector.get_selected_features(feature_names=feature_names)
 
     # Obtain a dataframe containing MUVR selected features
@@ -299,9 +316,9 @@ def feature_reduction(train_data_muvr,chisq_file):
 
     print('something')
 
-    df_muvr_min.to_csv(r'2023_jp_muvr_min.tsv', sep='\t')
-    df_muvr_mid.to_csv(r'2023_jp_muvr_mid.tsv', sep='\t')
-    df_muvr_max.to_csv(r'2023_jp_muvr_max.tsv', sep='\t')
+    #df_muvr_min.to_csv(r'2023_jp_muvr_min.tsv', sep='\t')
+    #df_muvr_mid.to_csv(r'2023_jp_muvr_mid.tsv', sep='\t')
+    #df_muvr_max.to_csv(r'2023_jp_muvr_max.tsv', sep='\t')
 
     return df_muvr_max
 
@@ -324,109 +341,6 @@ def feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_
     min_chisq_data.to_csv(r'2023_jp_complete_muvr_min.tsv', sep='\t')
     mid_chisq_data.to_csv(r'2023_jp_complete_muvr_mid.tsv', sep='\t')
     max_chisq_data.to_csv(r'2023_jp_complete_muvr_max.tsv', sep='\t')
-
-
-def simple_rf(label_kmer_df):
-
-    labels = np.array(label_kmer_df['SYMP'])
-    features= label_kmer_df.drop(['SYMP','LINEAGE'], axis = 1)
-
-
-    RSEED = 50
-
-    #train, test split the data
-    train_features, test_features, train_labels, test_labels = train_test_split(features, 
-                                                                                labels, 
-                                                                                test_size = 0.3, 
-                                                                                random_state = RSEED)
-    
-    #over sample
-    train_features, train_labels = RandomOverSampler().fit_resample(train_features, train_labels) #random state?
-
-
-    #build the model 
-    model = RandomForestClassifier(n_estimators=822, 
-                                   random_state=RSEED, 
-                                   max_features = 'sqrt',
-                                   n_jobs=-1, verbose = 1)
-    # fit the trainning data to the model 
-    model_fit = model.fit(train_features, train_labels)
-
-    #test the model on test data
-    test_model = model.predict(test_features)
-
-    test_rf_predictions = model.predict(test_features)
-    test_rf_probs = model.predict_proba(test_features)
-
-
-    # 5. get classification report
-    report_ = classification_report(
-        digits=6,
-        y_true= test_labels, 
-        y_pred= test_model)
-
-    print('Classification Report Simple RF: ' ,
-          report_)
-
-
-    
-    # 1. Confusion Matrix
-    visualizer = ConfusionMatrix(model, classes = ['BD', 'D', 'HUS'], size = (1000,800))
-
-    visualizer.fit(train_features, train_labels)  
-    visualizer.score(test_features, test_labels) 
-    visualizer.finalize()
-
-    visualizer.ax.set_xlabel('Predicted Class', fontsize=20, fontweight = 'bold')
-    visualizer.ax.set_ylabel('True Class', fontsize=20, fontweight = 'bold')
-    visualizer.ax.tick_params(axis = 'both', which = 'major', labelsize = 20)
-
-    for label in visualizer.ax.texts:
-        label.set_size(25)
-
-    visualizer.show(outpath='confusion_matrix_model_1') 
-
-
-
-def tune_rf(model_input):
-    # create a hyperparameter grid 
-    RSEED = 50
-
-    train_labels = np.array(model_input['SYMP'])
-    train= model_input.drop(['SYMP','LINEAGE'], axis = 1)
-
-    # number of trees in random forest
-    n_estimators = [int(x) for x in np.linspace(start = 200, stop = 1000, num = 10)]
-    print (n_estimators)
-
-    # number of features at every split
-    max_features = ['log2', 'sqrt']
-
-    # max depth
-    max_depth = [int(x) for x in np.linspace(100, 500, num = 11)]
-    print (max_depth)
-    max_depth.append(None)
-
-    # create random grid
-    random_grid = {
-     'n_estimators': n_estimators,
-     'max_features': max_features,
-     'max_depth': max_depth
-     }
-
-    # generate model 
-    estimator = RandomForestClassifier()
-
-    # Random search of parameters
-    #This hyper parameter tunning uses Stratified K-fold CV. In this method, each K-Fold retains the proportion of each class (D,BD, HUS) in the entire dataset.
-    model_tunning = RandomizedSearchCV(estimator, param_distributions = random_grid, n_iter = 100, cv = 10, verbose=2, random_state=RSEED, n_jobs = -1)
-
-    # Fit the model
-    model_tunning.fit(train, train_labels)
-
-    # print results
-    best_param = model_tunning.best_params_
-    print('Best params no oversampling', best_param)
 
 
 def tune_rf_group_oversampling(model_input, sampling, block_strategy):
@@ -522,14 +436,14 @@ def tune_rf_group_oversampling(model_input, sampling, block_strategy):
 def final_model(model_input, val_input):
     RSEED = 50
 
-    test_features = val_input.drop('SYMP', axis = 1)
+    test_features = val_input.iloc[:, :-7]
     test_labels = val_input['SYMP'].values.ravel()
 
     #print (test_features)
 
-
+    train_features = model_input.iloc[:, :-7]
     train_labels = model_input['SYMP'].values.ravel()
-    train_features= model_input.drop('SYMP', axis = 1)
+
 
     #print (train_features)
 
@@ -539,10 +453,10 @@ def final_model(model_input, val_input):
 
     #print (train_features, train_labels)
 
-    model = RandomForestClassifier(n_estimators=200, 
+    model = RandomForestClassifier(n_estimators=822,
                                    random_state=RSEED, 
                                    max_features = 'sqrt',
-                                   n_jobs=-1, verbose = 1, max_depth=460)
+                                   n_jobs=-1, verbose = 1, max_depth=220)
 
     model.fit(train_features, train_labels)
 
@@ -563,7 +477,7 @@ def final_model(model_input, val_input):
     print('Classification Report Validation Data: ' ,
           report_)
 
-
+    return test_rf_predictions,test_labels
     
     # 1. Confusion Matrix
     #visualizer = ConfusionMatrix(model, classes = ['BD', 'D', 'HUS'], size = (1000,800))
@@ -580,131 +494,6 @@ def final_model(model_input, val_input):
     #    label.set_size(25)
 
     #visualizer.show(outpath='confusion_matrix_model_1') 
-
-def cross_model_balanced(model_input, label_df):
-
-    #columns = model_input.columns.tolist()
-    #ßprint (columns)
-    #columns = columns.remove('SYMP')
-
-    # Create 10-folds for cross validation
-    row_nums = list(range(len(model_input)))
-    random.shuffle(row_nums)
-    splits = np.array_split(row_nums, 10)
-    splits_indeces = []
-    for array in splits:
-        splits_indeces += [model_input.index[array]]
-
-    acc_muvr_max = []
-    RSEED = 50
-
-    #data frame for storing probabilities of classification
-    final_res = pd.DataFrame()
-    #data frame for storing feature importance
-    final_imp = pd.DataFrame()
-    list_shap_values = list()
-    list_test_sets = pd.DataFrame()
-
-    #Test-set true lables
-    list_test_labels = []
-    #Test-set predictions
-    list_test_pred = []
-    
-    for x in range(10):
-        
-        test = model_input.iloc[splits[x]]
-        samples = test.index.values.tolist()
-        test_features = test.drop(['SYMP','LINEAGE'], axis = 1)
-        test_labels = test['SYMP'].values.ravel()
-        train = model_input.drop(splits_indeces[x],axis=0)
-        train_features = train.drop(['SYMP','LINEAGE'], axis = 1)
-        train_labels = train['SYMP'].values.ravel()
-        features_resampled, labels_resampled = RandomOverSampler(random_state=RSEED).fit_resample(train_features, train_labels)
-
-
-
-        model = RandomForestClassifier(n_estimators=200, 
-                                   random_state=RSEED, 
-                                   max_features = 'log2',
-                                   n_jobs=-1, verbose = 1, max_depth=260)
-        
-        model.fit(features_resampled, labels_resampled)
-        #test the model on test data
-        
-        test_model = model.predict(test_features)
-        test_rf_probs = model.predict_proba(test_features)
-        
-     
-        list_test_labels = list_test_labels + list(test_labels)
-        list_test_pred = list_test_pred + list(test_model)
-
-
-        # 4. extract feature importance 
-        feature_model = pd.DataFrame({'feature': test_features.columns,
-                   x: model.feature_importances_}).\
-                    sort_values(x, ascending = False)
-        feature_model = feature_model.set_index('feature')
-
-        final_imp = pd.concat([final_imp,feature_model], axis=1)
-
-        res_df = pd.DataFrame({'samples': samples,'labels': test_labels,'predictions': test_model, 'probabilties' : zip(test_rf_probs) })
-
-
-        final_res = pd.concat([final_res, res_df])
-
-        # 5. get classification report
-        report_ = classification_report(
-            digits=6,
-            y_true= test_labels, 
-            y_pred= test_model)
-        
-
-
-
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(test_features)
-
-
-        list_shap_values.append(shap_values)
-        list_test_sets = pd.concat([list_test_sets, test_features])
-
-
-
-        acc_muvr_max += [model.score(test_features, test_labels)]
-    print(sum(acc_muvr_max)/len(acc_muvr_max))
-    
-    #outputs commented out
-    final_res.to_csv(r'final_pred_standard_fixed.tsv', sep='\t')
-    final_imp['average'] = final_imp.mean(numeric_only=True, axis=1)
-    final_imp = final_imp.sort_values('average', ascending=False)
-    final_imp.to_csv(r'final_standard_fixed.tsv', sep='\t')
-    
-
-#   combining results from all iterations
-    shap_values = np.array(list_shap_values[0])
-    for i in range(1,len(list_shap_values)):
-        shap_values = np.concatenate((shap_values,np.array(list_shap_values[i])),axis=1)
-    
-    #print shap uncomment
-    label_dict = dict(zip(label_df['Sequence'], label_df['ANN']))
-    fest = list_test_sets.columns.values.tolist()
-
-    anns = []
-    for f in fest:
-        anns.append(label_dict[f])
-
-
-    print (model.classes_)
-
-    #shap.summary_plot(shap_values[0], list_test_sets, feature_names=anns)
-    #shap.summary_plot(shap_values[1], list_test_sets,feature_names=anns)
-    shap.summary_plot(shap_values[2], list_test_sets,feature_names=anns)
-
-    #shap.summary_plot(shap_values[0], list_test_sets)
-    #shap.summary_plot(shap_values[1], list_test_sets)
-    #shap.summary_plot(shap_values[2], list_test_sets)
-
-    return final_res, final_imp, list_test_pred, list_test_labels
 
 def cross_model_balanced_blocked(model_input, label_df,sampling,block_strategy):
 
@@ -834,131 +623,7 @@ def cross_model_balanced_blocked(model_input, label_df,sampling,block_strategy):
 
     return final_res, final_imp, list_test_pred, list_test_labels
 
-def cross_model_balanced_sublineage(model_input, label_df):
-    # columns = model_input.columns.tolist()
-    # ßprint (columns)
-    # columns = columns.remove('SYMP')
 
-    # Create 10-folds for cross validation
-    #row_nums = list(range(len(model_input)))
-    #random.shuffle(row_nums)
-    #splits = np.array_split(row_nums, 10)
-    #splits_indeces = []
-    #for array in splits:
-    #    splits_indeces += [model_input.index[array]]
-
-    #1. Import the data
-    all_labels = np.array(model_input['SYMP'])
-    features= model_input.drop(['SYMP','LINEAGE'], axis = 1)
-    lineages=np.array(model_input['LINEAGE'])
-
-    #set up the random seed
-    RSEED = 50
-
-    #Create an iterator to separate files in groups
-    logo = LeaveOneGroupOut()
-    cv_iterator = list(logo.split(features, all_labels, groups=lineages))
-
-    #to hold the max accuracy
-    acc_muvr_max = []
-
-    # data frame for storing probabilities of classification
-    final_res = pd.DataFrame()
-    # data frame for storing feature importance
-    final_imp = pd.DataFrame()
-    list_shap_values = list()
-    list_test_sets = pd.DataFrame()
-
-    # Test-set true lables
-    list_test_labels = []
-    # Test-set predictions
-    list_test_pred = []
-
-    for x in range(len(cv_iterator)):
-        test = model_input.iloc[cv_iterator[x][1]]
-        samples = test.index.values.tolist()
-        test_features = test.drop(['SYMP', 'LINEAGE'], axis=1)
-
-        test_labels = test['SYMP'].values.ravel()
-        train = model_input.iloc[cv_iterator[x][0]]
-        train_features = train.drop(['SYMP', 'LINEAGE'], axis=1)
-        train_labels = train['SYMP'].values.ravel()
-
-        features_resampled, labels_resampled = RandomOverSampler(random_state=RSEED).fit_resample(train_features,
-                                                                                                  train_labels)
-
-        model = RandomForestClassifier(n_estimators=200,
-                                       random_state=RSEED,
-                                       max_features='log2',
-                                       n_jobs=-1, verbose=1, max_depth=420)
-
-        model.fit(features_resampled, labels_resampled)
-        # test the model on test data
-
-        test_model = model.predict(test_features)
-        test_rf_probs = model.predict_proba(test_features)
-
-        list_test_labels = list_test_labels + list(test_labels)
-        list_test_pred = list_test_pred + list(test_model)
-
-        # 4. extract feature importance
-        feature_model = pd.DataFrame({'feature': test_features.columns,
-                                      x: model.feature_importances_}). \
-            sort_values(x, ascending=False)
-        feature_model = feature_model.set_index('feature')
-
-        final_imp = pd.concat([final_imp, feature_model], axis=1)
-
-        res_df = pd.DataFrame(
-            {'samples': samples, 'labels': test_labels, 'predictions': test_model, 'probabilties': zip(test_rf_probs)})
-
-        final_res = pd.concat([final_res, res_df])
-
-        # 5. get classification report
-        report_ = classification_report(
-            digits=6,
-            y_true=test_labels,
-            y_pred=test_model)
-
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(test_features)
-
-        list_shap_values.append(shap_values)
-        list_test_sets = pd.concat([list_test_sets, test_features])
-
-        acc_muvr_max += [model.score(test_features, test_labels)]
-    print(sum(acc_muvr_max) / len(acc_muvr_max))
-
-    # outputs commented out
-    #final_res.to_csv(r'final_pred_grouped_test.tsv', sep='\t')
-    #final_imp['average'] = final_imp.mean(numeric_only=True, axis=1)
-    #final_imp = final_imp.sort_values('average', ascending=False)
-    #final_imp.to_csv(r'final_grouped_test.tsv', sep='\t')
-
-    #   combining results from all iterations
-    shap_values = np.array(list_shap_values[0])
-    for i in range(1, len(list_shap_values)):
-        shap_values = np.concatenate((shap_values, np.array(list_shap_values[i])), axis=1)
-
-    # print shap uncomment
-    label_dict = dict(zip(label_df['Sequence'], label_df['ANN']))
-    fest = list_test_sets.columns.values.tolist()
-
-    anns = []
-    for f in fest:
-        anns.append(label_dict[f])
-
-    print(model.classes_)
-
-    # shap.summary_plot(shap_values[0], list_test_sets, feature_names=anns)
-    # shap.summary_plot(shap_values[1], list_test_sets,feature_names=anns)
-    shap.summary_plot(shap_values[2], list_test_sets, feature_names=anns)
-
-    # shap.summary_plot(shap_values[0], list_test_sets)
-    # shap.summary_plot(shap_values[1], list_test_sets)
-    # shap.summary_plot(shap_values[2], list_test_sets)
-
-    return final_res, final_imp, list_test_pred, list_test_labels
 
 
 def create_fasta(final_imp):
@@ -979,7 +644,7 @@ def calc_accuracy(preds, labels):
             output_dict=True)
 
     classification_report_df = pd.DataFrame(report_).transpose()
-    classification_report_df.to_csv(r'2023_jp_classification_report_CV_smote_t5_max.tsv', sep='\t')
+    classification_report_df.to_csv(r'2023_jp_classification_report_test_random_max.tsv', sep='\t')
 
     print('Classification Report Training Data: ' ,
           report_)
@@ -995,9 +660,6 @@ def calc_accuracy(preds, labels):
 
 ################ MAIN ##############
 
-#get all opts - this will have to be modified
-#feature_file, ann_file, meta_file, val_file, chisq_file = get_opts()
-
 #1. create a train-test split - considering population structre and blocking hihgly similar isoaltes to avoid data-leakage
 #train_data,validation_data=split_dataset(meta_file)
 
@@ -1007,9 +669,10 @@ def calc_accuracy(preds, labels):
 
 #3. MUVR step
  #This will have to be run on an HPC (size of chisq_file=4GBs)
-train_data_muvr, chisq_file= get_opts_muvr()
+ #model can refer to: "RFC" or "XGBC"
+#train_data_muvr, chisq_file,model= get_opts_muvr()
 #print ("MUVR feature reduction")
-feature_df = feature_reduction(train_data_muvr, chisq_file)
+#feature_df = feature_reduction(train_data_muvr, chisq_file, model)
 
 #4. FEATURE EXTRACTION STEP
     #Extract relevant features from all samples
@@ -1018,9 +681,9 @@ feature_df = feature_reduction(train_data_muvr, chisq_file)
 
 #5. LOAD AND WRANGLE TRAIN DATA FOR RF
 #print ("load training data")
-feature_file, train_meta_file, test_meta_file, ann_file= get_opts_rf()
-train_data = load_features(feature_file, train_meta_file)
-label_df=load_feat_ann(ann_file)
+#feature_file, train_meta_file, test_meta_file, ann_file= get_opts_rf()
+#train_data = load_features(feature_file, train_meta_file)
+#label_df=load_feat_ann(ann_file)
 
 #6. HYPER-PARAMETER OPTIMIZATION RF
 #best_params_random_t5 = tune_rf_group_oversampling(train_data, 'random', 't5')
@@ -1033,7 +696,17 @@ label_df=load_feat_ann(ann_file)
 #8. EXTRACT IMPORTANT FEATURES AS FASTA FILE
 #imp_fasta = create_fasta(final_imp_t5)
 
-#9. EVALUATE RF WITH TEST DATA - T5 BLOCKING
+#9. LOAD AND WRANGLE TEST DATA FOR RF
+print ("load test data")
+#feature_file, train_meta_file, test_meta_file, ann_file= get_opts_rf()
+#train_data = load_features(feature_file, train_meta_file)
+#test_data = load_features(feature_file, test_meta_file)
+#label_df=load_feat_ann(ann_file)
+
+#10. EVALUATE RF WITH TEST DATA - T5 BLOCKING
+test_preds, test_labels = final_model(train_data, test_data)
+calc_accuracy(test_preds, test_labels)
+
 #print ("load validation data")
 #val_df = load_features(val_file, meta_file,"V")
 
