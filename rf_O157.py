@@ -63,7 +63,9 @@ from imblearn.pipeline import Pipeline
 from imblearn.over_sampling import SMOTE
 
 ###### ------- MUVR ------- ######
+
 #from py_muvr.feature_selector import FeatureSelector
+
 from concurrent.futures import ProcessPoolExecutor
 
 import shap
@@ -321,6 +323,7 @@ def feature_reduction(train_data_muvr,chisq_file, model):
     df_muvr_min = model_input[to_predict+list(selected_features.min)]
     df_muvr_mid = model_input[to_predict+list(selected_features.mid)]
     df_muvr_max = model_input[to_predict+list(selected_features.max)]
+
 
     print('something')
 
@@ -878,6 +881,7 @@ def create_fasta(final_imp,model_name, sampling, block_strategy, features_size, 
 
 #5. LOAD AND WRANGLE TRAIN DATA FOR MODELS
 #print ("load training data")
+
 rf_feature_file, xgbc_feature_file, train_meta_file, test_meta_file, rf_ann_file, xgbc_ann_file = get_opts_model()
 #Process RF data
 rf_train_data = load_features(rf_feature_file, train_meta_file)
