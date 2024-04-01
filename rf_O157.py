@@ -87,11 +87,11 @@ def get_opts_extract():
     else:
         return sys.argv[1], sys.argv[2], sys.argv[3],sys.argv[4]
 
-def get_opts_rf():
-    if len(sys.argv) != 5:
+def get_opts_model():
+    if len(sys.argv) != 7:
         usage()
     else:
-        return sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+        return sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4],sys.argv[5], sys.argv[6]
 
 def load_feat_ann(feature_file):
     label_kmer_df = pd.read_csv(feature_file, sep='\t')
@@ -351,7 +351,7 @@ def feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_
     max_chisq_data.to_csv(r'2023_jp_complete_muvr_max.tsv', sep='\t')
 
 
-def tune_group_oversampling(model_name, model_input, sampling, block_strategy, fit_parameter, features):
+def tune_group_oversampling(model_name, model_input, sampling, block_strategy, fit_parameter, features_sizes):
     RSEED = 50
 
     #clean up the data
@@ -366,7 +366,7 @@ def tune_group_oversampling(model_name, model_input, sampling, block_strategy, f
         # Encode the labels
         encoder = LabelEncoder()
         train_labels = encoder.fit_transform(train_labels)
-        #Calculate sample weights
+        #Calculate sample weights - they will only be used when no oversampling happens
         sample_weights = compute_sample_weight(
             class_weight='balanced',
             y=train_labels
@@ -410,11 +410,23 @@ def tune_group_oversampling(model_name, model_input, sampling, block_strategy, f
     if sampling == 'random':
         oversampler = RandomOverSampler(random_state=RSEED)
         # create random grid
-        random_grid = {
-            'model__n_estimators': n_estimators,
-            'model__max_features': max_features,
-            'model__max_depth': max_depth
-        }
+        if model_name == 'RF':
+            random_grid = {
+                'model__n_estimators': n_estimators,
+                'model__max_features': max_features,
+                'model__max_depth': max_depth
+            }
+
+        if model_name == 'XGBC':
+            random_grid = {
+                'model__eta': eta,
+                'model__gamma': gamma,
+                'model__max_depth': max_depth_xgbc,
+                'model__min_child_weight': min_child_weight,
+                'model__subsample': subsample,
+                'model__colsample_bytree': colsample_bytree,
+                'model__n_estimators': n_estimators
+            }
 
         tunning_pipeline = Pipeline([
             ('oversampler', oversampler),
@@ -424,12 +436,26 @@ def tune_group_oversampling(model_name, model_input, sampling, block_strategy, f
     if sampling == 'smote':
         oversampler = SMOTE(random_state=RSEED)
         # create random grid
-        random_grid = {
-            'oversampler__k_neighbors': k_neighbors,
-            'model__n_estimators': n_estimators,
-            'model__max_features': max_features,
-            'model__max_depth': max_depth
-        }
+        if model_name == 'RF':
+            random_grid = {
+                'oversampler__k_neighbors': k_neighbors,
+                'model__n_estimators': n_estimators,
+                'model__max_features': max_features,
+                'model__max_depth': max_depth
+            }
+
+        if model_name == 'XGBC':
+            random_grid = {
+                'oversampler__k_neighbors': k_neighbors,
+                'model__eta': eta,
+                'model__gamma': gamma,
+                'model__max_depth': max_depth_xgbc,
+                'model__min_child_weight': min_child_weight,
+                'model__subsample': subsample,
+                'model__colsample_bytree': colsample_bytree,
+                'model__n_estimators': n_estimators
+            }
+
 
         tunning_pipeline = Pipeline([
             ('oversampler', oversampler),
@@ -448,14 +474,13 @@ def tune_group_oversampling(model_name, model_input, sampling, block_strategy, f
                 ('model', model)
             ])
 
-        elif model_name == 'XGBC':
+        if model_name == 'XGBC':
             random_grid = {
                 'eta': eta,
                 'gamma': gamma,
                 'max_depth': max_depth_xgbc,
                 'min_child_weight': min_child_weight,
                 'subsample': subsample,
-                #'model__sample_weight': sample_weights, #pass directly to fit object
                 'colsample_bytree': colsample_bytree,
                 'n_estimators': n_estimators
             }
@@ -485,15 +510,17 @@ def tune_group_oversampling(model_name, model_input, sampling, block_strategy, f
     scoring_strategy = ['accuracy', 'balanced_accuracy']
 
     #GridSearch
-    #model_tunning = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions = random_grid, n_iter = 100, cv = cv_iterator, verbose=2, random_state=RSEED, n_jobs = -1)
     model_tunning = RandomizedSearchCV(estimator=tunning_pipeline, param_distributions=random_grid, n_iter=100,
-                                       cv=cv_iterator, scoring=scoring_strategy, refit='balanced_accuracy', verbose=2,
+                                       cv=cv_iterator, scoring=scoring_strategy, refit=fit_parameter, verbose=2,
                                        random_state=RSEED, n_jobs=-1)
-    if model_name == 'RF':
-        model_tunning.fit(train, train_labels, verbose=False)
 
-    if model_name == 'XGBC':
+    if model_name == 'XGBC' and sampling=='none':
         model_tunning.fit(train, train_labels, sample_weight=sample_weights, verbose=False)
+
+    else:
+        model_tunning.fit(train, train_labels)
+
+
 
     best_params= model_tunning.best_params_
     best_score=model_tunning.best_score_
@@ -501,18 +528,16 @@ def tune_group_oversampling(model_name, model_input, sampling, block_strategy, f
     best_model=model_tunning.best_estimator_
 
     # EXPORT THE CV RESULTS
-    cv_file_name = f'results/03_cv/{model_name}_{sampling}_{block_strategy}_{features}.tsv'  # Using f-string formatting
+    cv_file_name = f'results/03_cv/{model_name}_{sampling}_{block_strategy}_{features_sizes}.tsv'  # Using f-string formatting
     cv_results.to_csv(cv_file_name, sep='\t')
 
 
     #Filter the results of the classifier
     best_index = model_tunning.best_index_
     best_cv_results=pd.DataFrame(cv_results.iloc[best_index,:])
-    #best_cv_results=best_cv_results.transpose()
-    #best_cv_results = best_cv_results.assign(experiment=experiment_name)
 
     #EXPORT THE ML MODEL
-    model_file_name = f'results/04_models/{fit_parameter}/{model_name}_{sampling}_{block_strategy}_{features}.joblib'  # Using f-string formatting
+    model_file_name = f'results/04_models/{fit_parameter}/{model_name}_{sampling}_{block_strategy}_{features_sizes}.joblib'  # Using f-string formatting
     joblib.dump(best_model, model_file_name)
 
     return best_params,best_cv_results,best_model
@@ -525,7 +550,7 @@ def tune_group_oversampling(model_name, model_input, sampling, block_strategy, f
     #print("Best score:", best_score)
     #return best_param
 
-def cross_model_balanced_blocked(model_input, best_params, label_df, sampling, block_strategy, model_name, features, fit_parameter):
+def cross_model_balanced_blocked(model_input, best_params, label_df, sampling, block_strategy, model_name, features_size, fit_parameter):
 
     #1. Import the data
     all_labels = np.array(model_input['SYMP'])
@@ -578,18 +603,27 @@ def cross_model_balanced_blocked(model_input, best_params, label_df, sampling, b
             train_labels = encoder.fit_transform(train_labels)
 
         if model_name == 'RF':
+            if sampling=='none':
+                model = RandomForestClassifier(n_estimators=best_params['model__n_estimators'],
+                                               max_features=best_params['model__max_features'],
+                                               max_depth=best_params['model__max_depth'],
+                                               random_state=RSEED,
+                                               n_jobs=-1, verbose=1)
+
             if sampling=='random':
                 features_resampled, labels_resampled = RandomOverSampler(random_state=RSEED).fit_resample(train_features,train_labels)
-                model = RandomForestClassifier(n_estimators=822,
+                model = RandomForestClassifier(n_estimators=best_params['model__n_estimators'],
+                                               max_features=best_params['model__max_features'],
+                                               max_depth=best_params['model__max_depth'],
                                                random_state=RSEED,
-                                               max_features='sqrt',
-                                               n_jobs=-1, verbose=1, max_depth=220)
+                                               n_jobs=-1, verbose=1)
             if sampling=='smote':
                 features_resampled, labels_resampled = SMOTE(random_state=RSEED,k_neighbors=1).fit_resample(train_features,train_labels)
-                model = RandomForestClassifier(n_estimators=377,
+                model = RandomForestClassifier(n_estimators=best_params['model__n_estimators'],
+                                               max_features=best_params['model__max_features'],
+                                               max_depth=best_params['model__max_depth'],
                                                random_state=RSEED,
-                                               max_features='sqrt',
-                                               n_jobs=-1, verbose=1, max_depth=300)
+                                               n_jobs=-1, verbose=1)
 
         if model_name == 'XGBC':
 
@@ -598,6 +632,45 @@ def cross_model_balanced_blocked(model_input, best_params, label_df, sampling, b
                     class_weight='balanced',
                     y=train_labels
                 )
+
+                #THIS WILL BE REMOVED#
+                model = XGBClassifier(objective='multi:softmax',
+                                      subsample=best_params.subsample,
+                                      n_estimators=best_params.n_estimators,
+                                      min_child_weight=best_params.min_child_weight,
+                                      max_depth=best_params.max_depth,
+                                      gamma=best_params.gamma,
+                                      eta=best_params.kwargs['eta'],
+                                      colsample_bytree=best_params.colsample_bytree,
+                                      random_state=RSEED,
+                                      n_jobs=-1)
+
+                # THIS WILL BE RE-INCORPORATED#
+                # model = XGBClassifier(objective='multi:softmax',
+                #                       subsample=best_params['subsample'],
+                #                       n_estimators=best_params['n_estimators'],
+                #                       min_child_weight=best_params['min_child_weight'],
+                #                       max_depth=best_params['max_depth'],
+                #                       gamma=best_params['gamma'],
+                #                       eta=best_params['eta'],
+                #                       colsample_bytree=best_params['colsample_bytree'],
+                #                       random_state=RSEED,
+                #                       n_jobs=-1)
+
+            if sampling=='random':
+                features_resampled, labels_resampled = RandomOverSampler(random_state=RSEED).fit_resample(train_features,train_labels)
+                model = XGBClassifier(objective='multi:softmax',
+                                      subsample=best_params['subsample'],
+                                      n_estimators=best_params['n_estimators'],
+                                      min_child_weight=best_params['min_child_weight'],
+                                      max_depth=best_params['max_depth'],
+                                      gamma=best_params['gamma'],
+                                      eta=best_params['eta'],
+                                      colsample_bytree=best_params['colsample_bytree'],
+                                      random_state=RSEED,
+                                      n_jobs=-1)
+            if sampling=='smote':
+                features_resampled, labels_resampled = SMOTE(random_state=RSEED,k_neighbors=1).fit_resample(train_features,train_labels)
                 model = XGBClassifier(objective='multi:softmax',
                                       subsample=best_params['subsample'],
                                       n_estimators=best_params['n_estimators'],
@@ -609,29 +682,23 @@ def cross_model_balanced_blocked(model_input, best_params, label_df, sampling, b
                                       random_state=RSEED,
                                       n_jobs=-1)
 
-            if sampling=='random':
-                features_resampled, labels_resampled = RandomOverSampler(random_state=RSEED).fit_resample(train_features,train_labels)
-                model = RandomForestClassifier(n_estimators=822,
-                                               random_state=RSEED,
-                                               max_features='sqrt',
-                                               n_jobs=-1, verbose=1, max_depth=220)
-            if sampling=='smote':
-                features_resampled, labels_resampled = SMOTE(random_state=RSEED,k_neighbors=1).fit_resample(train_features,train_labels)
-                model = RandomForestClassifier(n_estimators=377,
-                                               random_state=RSEED,
-                                               max_features='sqrt',
-                                               n_jobs=-1, verbose=1, max_depth=300)
-
-        if sampling == 'none':
+        if sampling == 'none' and model_name=='XGBC':
             model.fit(train_features,train_labels, sample_weight=sample_weights)
+
+        elif sampling == 'none' and model_name=='RF':
+            model.fit(train_features,train_labels)
 
         else:
             model.fit(features_resampled, labels_resampled)
 
         # test the model on test data
-
         test_model = model.predict(test_features)
-        test_rf_probs = model.predict_proba(test_features)
+        test_probs = model.predict_proba(test_features) #Formerly: test_rf_probs
+
+        # If model is XGBC, reverse the encoder label
+        if model_name == 'XGBC':
+            test_labels = encoder.inverse_transform(test_labels)
+            test_model = encoder.inverse_transform(test_model)
 
         list_test_labels = list_test_labels + list(test_labels)
         list_test_pred = list_test_pred + list(test_model)
@@ -644,16 +711,19 @@ def cross_model_balanced_blocked(model_input, best_params, label_df, sampling, b
 
         final_imp = pd.concat([final_imp, feature_model], axis=1)
 
+        #Create a dataframe with the predictions and the probabilities
         res_df = pd.DataFrame(
-            {'samples': samples, 'labels': test_labels, 'predictions': test_model, 'probabilties': zip(test_rf_probs)})
+            {'samples': samples, 'labels': test_labels, 'predictions': test_model})
+
+        #Merge with probabilities
+        res_df = pd.merge(res_df, pd.DataFrame(test_probs), how='left',
+                                  left_index=True, right_index=True)
+
+        col_names = np.array(['samples', 'labels', 'predictions', 'BD', 'D', 'HUS'])
+        res_df.columns = col_names
 
         final_res = pd.concat([final_res, res_df])
 
-        # 5. get classification report
-        report_ = classification_report(
-            digits=6,
-            y_true=test_labels,
-            y_pred=test_model)
 
         explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(test_features)
@@ -665,43 +735,43 @@ def cross_model_balanced_blocked(model_input, best_params, label_df, sampling, b
     print(sum(acc_muvr_max) / len(acc_muvr_max))
 
     #WRITE PREDICTIONS OUTPUTS AND THEIR PROBABILITY
-    predictions_file_name = f'results/07_predictions/{fit_parameter}/training_{model_name}_{sampling}_{block_strategy}_{features}.tsv'
-    final_res.to_csv(predictions_file_name, sep='\t')
+    #predictions_file_name = f'results/07_predictions/{fit_parameter}/training_{model_name}_{sampling}_{block_strategy}_{features_size}.tsv'
+    #final_res.to_csv(predictions_file_name, sep='\t')
 
     #WRITE IMPORTANCES OF EACH FEATURE - SORTED BY AVERAGE IMPORTANCE
     final_imp['average'] = final_imp.mean(numeric_only=True, axis=1)
     final_imp = final_imp.sort_values('average', ascending=False)
 
-    importances_file_name = f'results/06_feature_importances/{fit_parameter}/training_{model_name}_{sampling}_{block_strategy}_{features}.tsv'
-    final_imp.to_csv(importances_file_name, sep='\t')
+    #importances_file_name = f'results/06_feature_importances/{fit_parameter}/training_{model_name}_{sampling}_{block_strategy}_{features_size}.tsv'
+    #final_imp.to_csv(importances_file_name, sep='\t')
 
     #   combining results from all iterations
-    #shap_values = np.array(list_shap_values[0])
-    #for i in range(1, len(list_shap_values)):
-    #    shap_values = np.concatenate((shap_values, np.array(list_shap_values[i])), axis=1)
+    shap_values = np.array(list_shap_values[0])
+    for i in range(1, len(list_shap_values)):
+        shap_values = np.concatenate((shap_values, np.array(list_shap_values[i])), axis=1)
 
     # print shap uncomment
-    #label_dict = dict(zip(label_df['Sequence'], label_df['ANN']))
-    #fest = list_test_sets.columns.values.tolist()
+    label_dict = dict(zip(label_df['Sequence'], label_df['ANN']))
+    fest = list_test_sets.columns.values.tolist()
 
-    #anns = []
-    #for f in fest:
-    #    anns.append(label_dict[f])
+    anns = []
+    for f in fest:
+        anns.append(label_dict[f])
 
     #print(model.classes_)
 
-    #shap.summary_plot(shap_values[0], list_test_sets, feature_names=anns)
-    #shap.summary_plot(shap_values[1], list_test_sets,feature_names=anns)
-    #shap.summary_plot(shap_values[2], list_test_sets, feature_names=anns)
+    shap.summary_plot(shap_values[0], list_test_sets, feature_names=anns)
+    shap.summary_plot(shap_values[1], list_test_sets,feature_names=anns)
+    shap.summary_plot(shap_values[2], list_test_sets, feature_names=anns)
 
     # shap.summary_plot(shap_values[0], list_test_sets)
     # shap.summary_plot(shap_values[1], list_test_sets)
     # shap.summary_plot(shap_values[2], list_test_sets)
 
-    return final_res, final_imp, list_test_pred, list_test_labels
+    return list_test_pred, list_test_labels, final_imp
 
 
-def predict_test_set(best_model, val_input, model_name, sampling, block_strategy, features, fit_parameter):
+def predict_test_set(best_model, val_input, model_name, sampling, block_strategy, features_size, fit_parameter):
     RSEED = 50
 
     #Clean up the test-data
@@ -736,24 +806,14 @@ def predict_test_set(best_model, val_input, model_name, sampling, block_strategy
     col_names = np.array(['samples', 'labels','predictions','BD','D','HUS'])
     predictions_df.columns = col_names
 
-    test_predictions_file_name = f'results/07_predictions/{fit_parameter}/test_{model_name}_{sampling}_{block_strategy}_{features}.tsv'  # Using f-string formatting
+    test_predictions_file_name = f'results/07_predictions/{fit_parameter}/test_{model_name}_{sampling}_{block_strategy}_{features_size}.tsv'  # Using f-string formatting
     predictions_df.to_csv(test_predictions_file_name, sep='\t')
 
 
     return test_predictions, test_labels
 
-def create_fasta(final_imp,experiment_type, model_name, sampling, block_strategy, features, fit_parameter):
-    features =  final_imp.index.values.tolist()
-    #print (features)
-    features_file_name = f'results/08_fasta_features/{fit_parameter}/{experiment_type}_{model_name}_{sampling}_{block_strategy}_{features}.tsv'  # Using f-string formatting
-    with open(features_file_name, 'w') as f:
-        for x, feat in enumerate(features):
-            f.write('>Feature'+str(x+1))
-            f.write('\n')
-            f.write(feat)
-            f.write('\n')
 
-def calc_accuracy(preds, labels, experiment_type, model_name, sampling, block_strategy, features, fit_parameter):
+def calc_accuracy(preds, labels, experiment_type, model_name, sampling, block_strategy, features_size, fit_parameter):
 
     #CREATE AND EXPORT CLASSIFICATION REPORT
     report_ = classification_report(
@@ -764,24 +824,35 @@ def calc_accuracy(preds, labels, experiment_type, model_name, sampling, block_st
 
     classification_report_df = pd.DataFrame(report_).transpose()
 
-    classification_report_file_name = f'results/05_classification_reports/{fit_parameter}/{experiment_type}_{model_name}_{sampling}_{block_strategy}_{features}.tsv'  # Using f-string formatting
+    classification_report_file_name = f'results/05_classification_reports/{fit_parameter}/{experiment_type}_{model_name}_{sampling}_{block_strategy}_{features_size}.tsv'  # Using f-string formatting
     classification_report_df.to_csv(classification_report_file_name, sep='\t')
 
 
     #CREATE AND EXPORT CONFUSION MATRIX
     label_names_array=np.array(['BD','D','HUS'])
     cm = confusion_matrix(labels, preds, labels=label_names_array)
-
-    #cm = confusion_matrix(list_test_labels, list_test_pred, labels=label_names_array)
     cm_df=pd.DataFrame(cm, index=label_names_array, columns=label_names_array)
 
     # Export DataFrame to CSV
-    confusion_matrix_file_name=f'results/09_confusion_matrices/{fit_parameter}/{experiment_type}_{model_name}_{sampling}_{block_strategy}_{features}.tsv'
+    confusion_matrix_file_name=f'results/09_confusion_matrices/{fit_parameter}/{experiment_type}_{model_name}_{sampling}_{block_strategy}_{features_size}.tsv'
     cm_df.to_csv(confusion_matrix_file_name, sep='\t')
+
 
     disp = ConfusionMatrixDisplay.from_predictions(cmap=plt.cm.Blues, y_true = labels, y_pred = preds, display_labels=['Bloody Diarrhoea', 'Diarrhoea', 'HUS'], normalize='true', values_format='.1g')
     disp.plot()
     plt.show()
+
+def create_fasta(final_imp,model_name, sampling, block_strategy, features_size, fit_parameter):
+    features =  final_imp.index.values.tolist()
+    #print (features)
+    features_file_name = f'results/08_fasta_features/{fit_parameter}/training_{model_name}_{sampling}_{block_strategy}_{features_size}.fasta'  # Using f-string formatting
+    with open(features_file_name, 'w') as f:
+        for x, feat in enumerate(features):
+            f.write('>Feature'+str(x+1))
+            f.write('\n')
+            f.write(feat)
+            f.write('\n')
+
 
 
 ################ MAIN ##############
@@ -807,14 +878,75 @@ def calc_accuracy(preds, labels, experiment_type, model_name, sampling, block_st
 
 #5. LOAD AND WRANGLE TRAIN DATA FOR MODELS
 #print ("load training data")
-feature_file, train_meta_file, test_meta_file, ann_file= get_opts_rf()
-train_data = load_features(feature_file, train_meta_file)
-test_data = load_features(feature_file, test_meta_file)
-label_df=load_feat_ann(ann_file)
+rf_feature_file, xgbc_feature_file, train_meta_file, test_meta_file, rf_ann_file, xgbc_ann_file = get_opts_model()
+#Process RF data
+rf_train_data = load_features(rf_feature_file, train_meta_file)
+rf_test_data = load_features(rf_feature_file, test_meta_file)
+rf_label_df=load_feat_ann(rf_ann_file)
+#Process XGBC data
+xgbc_train_data = load_features(xgbc_feature_file, train_meta_file)
+xgbc_test_data = load_features(xgbc_feature_file, test_meta_file)
+xgbc_label_df=load_feat_ann(xgbc_ann_file)
 
-#6. HYPER-PARAMETER OPTIMIZATION RF
-#rf_best_params_random_t5 = tune_group_oversampling('RF',train_data, 'random', 't5')
-#rf_best_params_smote_t5 = tune_group_oversampling('RF', train_data, 'smote', 't5')
+
+#################################################
+
+###         RF MODEL                          ##
+
+###################################################
+
+##### NO OVERSAMPLING - T5 BLOCKING - MAX FEATURES ####
+
+# ###ACCURACY
+##Hyp optimization and model selection
+# best_params,best_cv_results, best_model = tune_group_oversampling('RF', rf_train_data, 'none', 't5', 'accuracy','max')
+# # Feature importance and training set predictions
+# train_preds, train_labels= cross_model_balanced_blocked(rf_train_data, best_params, rf_label_df,'none','t5','RF', 'max', 'accuracy')
+# calc_accuracy(train_preds, train_labels,'training','RF','none','t5','max','accuracy')
+# # Predicting the test set
+# test_preds, test_labels= predict_test_set(best_model, rf_test_data, 'RF', 'none','t5','max','accuracy')
+# calc_accuracy(test_preds, test_labels,'test','RF','none','t5','max','accuracy')
+
+
+
+###BALANCED ACCURACY
+# Hyp optimization and model selection
+# best_params,best_cv_results, best_model = tune_group_oversampling('RF', rf_train_data, 'none', 't5', 'balanced_accuracy','max')
+# # Feature importance and training set predictions
+# train_preds, train_labels= cross_model_balanced_blocked(rf_train_data, best_params, rf_label_df,'none','t5','RF', 'max', 'balanced_accuracy')
+# calc_accuracy(train_preds, train_labels,'training','RF','none','t5','max','balanced_accuracy')
+# # Predicting the test set
+# test_preds, test_labels= predict_test_set(best_model, rf_test_data, 'RF', 'none','t5','max','balanced_accuracy')
+# calc_accuracy(test_preds, test_labels,'test','RF','none','t5','max','balanced_accuracy')
+
+# #### RANDOM OVERSAMPLING - T5 BLOCKING - MAX FEATURES ####
+# # Hyp optimization and model selection
+# best_params,best_cv_results, best_model = tune_group_oversampling('RF', rf_train_data, 'random', 't5', 'accuracy','max')
+# # Feature importance and training set predictions
+# train_preds, train_labels= cross_model_balanced_blocked(rf_train_data, best_params, rf_label_df,'random','t5','RF', 'max', 'accuracy')
+# calc_accuracy(train_preds, train_labels,'training','RF','random','t5','max','accuracy')
+# # Predicting the test set
+# test_preds, test_labels= predict_test_set(best_model, rf_test_data, 'RF', 'random','t5','max','accuracy')
+# calc_accuracy(test_preds, test_labels,'test','RF','random','t5','max','accuracy')
+
+#### SMOTE OVERSAMPLING - T5 BLOCKING - MAX FEATURES ####
+# Hyp optimization and model selection
+# best_params,best_cv_results, best_model = tune_group_oversampling('RF', rf_train_data, 'smote', 't5', 'accuracy','max')
+# # Feature importance and training set predictions
+# train_preds, train_labels= cross_model_balanced_blocked(rf_train_data, best_params, rf_label_df,'smote','t5','RF', 'max', 'accuracy')
+# calc_accuracy(train_preds, train_labels,'training','RF','smote','t5','max','accuracy')
+# # Predicting the test set
+# test_preds, test_labels= predict_test_set(best_model, rf_test_data, 'RF', 'smote','t5','max','accuracy')
+# calc_accuracy(test_preds, test_labels,'test','RF','smote','t5','max','accuracy')
+
+
+
+#################################################
+
+###         old code                         ##
+
+###################################################
+
 
 
 #7. ====== EVALUATE RF =======
@@ -837,6 +969,10 @@ label_df=load_feat_ann(ann_file)
 #calc_accuracy(test_preds, test_labels)
 #====
 
+#-Import model - optional
+#xgbc_best_model_none_t5_max = joblib.load("results/04_models/XGBC_none_t5_balanced_accuracy_max.joblib") #this will be removed
+
+
 #################################################
 
 ###         XGBC MODEL                          ##
@@ -845,22 +981,76 @@ label_df=load_feat_ann(ann_file)
 
 
 ##### NO OVERSAMPLING - T5 BLOCKING - MAX FEATURES ####
+
+##ACCURACY
 ## Hyp optimization and model selection
-#xgbc_best_params_none_t5_max,xgbc_best_cv_results_none_t5_max, xgbc_best_model_none_t5_max = tune_group_oversampling('XGBC', train_data, 'none', 't5', 'balanced_accuracy','max')
+# best_params,best_cv_results, best_model = tune_group_oversampling('XGBC', xgbc_train_data, 'none', 't5', 'accuracy','max')
+# ## Feature importance and training set predictions
+# train_preds, train_labels= cross_model_balanced_blocked(xgbc_train_data, best_params, xgbc_label_df,'none','t5','XGBC', 'max', 'accuracy')
+# calc_accuracy(train_preds, train_labels,'training','XGBC','none','t5','max','accuracy')
+# #Predicting the test set
+# #Import model - optional
+# #xgbc_best_model_none_t5_max = joblib.load("results/04_models/XGBC_none_t5_balanced_accuracy_max.joblib") #this will be removed
+# test_preds, test_labels= predict_test_set(best_model, xgbc_test_data, 'XGBC', 'none','t5','max','accuracy')
+# calc_accuracy(test_preds, test_labels,'test','XGBC','none','t5','max','accuracy')
 
-## Feature importance and training set predictions
-#final_res_none_t5_max, final_imp_none_t5_max, preds_none_t5_max, labels_none_t5_max = cross_model_balanced_blocked(train_data, xgbc_best_params_none_t5_max, label_df,'none','t5','XGBC', 'max')
-#calc_accuracy(preds_none_t5_max, labels_none_t5_max)
 
-#Predicting the test set
-#Import model - optional
-#xgbc_best_model_none_t5_max = joblib.load("results/04_models/XGBC_none_t5_balanced_accuracy_max.joblib") #this will be removed
-test_preds, test_labels = predict_test_set(xgbc_best_model_none_t5_max, test_data, 'XGBC', 'none','t5','max','balanced_accuracy')
-calc_accuracy(test_preds, test_labels,'test','XGBC','none','t5','max','balanced_accuracy')
+##BALANCED ACCURACY
+# ## Hyp optimization and model selection
+# best_params,best_cv_results, best_model = tune_group_oversampling('XGBC', xgbc_train_data, 'none', 't5', 'balanced_accuracy','max')
+# ## Feature importance and training set predictions
+# train_preds, train_labels= cross_model_balanced_blocked(xgbc_train_data, best_params, xgbc_label_df,'none','t5','XGBC', 'max', 'balanced_accuracy')
+# calc_accuracy(train_preds, train_labels,'training','XGBC','none','t5','max','balanced_accuracy')
+# #Predicting the test set
+# #Import model - optional
+# #xgbc_best_model_none_t5_max = joblib.load("results/04_models/XGBC_none_t5_balanced_accuracy_max.joblib") #this will be removed
+# test_preds, test_labels= predict_test_set(best_model, xgbc_test_data, 'XGBC', 'none','t5','max','balanced_accuracy')
+# calc_accuracy(test_preds, test_labels,'test','XGBC','none','t5','max','balanced_accuracy')
 
 #xgbc_best_params_random_t5 = tune_group_oversampling('XGBC', train_data, 'random', 't5')
 #xgbc_best_params_smote_t5 = tune_group_oversampling('XGBC', train_data, 'smote', 't5')
 
+
+
+#################################################
+
+###       XGBC MODEL with RF features        ####
+
+#################################################
+
+
+##### NO OVERSAMPLING - T5 BLOCKING - MAX FEATURES ####
+
+# #ACCURACY
+# # Hyp optimization and model selection
+# best_params,best_cv_results, best_model = tune_group_oversampling('XGBC', rf_train_data, 'none', 't5', 'accuracy','max_RF')
+# ## Feature importance and training set predictions
+# train_preds, train_labels= cross_model_balanced_blocked(rf_train_data, best_params, rf_label_df,'none','t5','XGBC', 'max_RF', 'accuracy')
+# calc_accuracy(train_preds, train_labels,'training','XGBC','none','t5','max_RF','accuracy')
+# #Predicting the test set
+# #Import model - optional
+# #xgbc_best_model_none_t5_max = joblib.load("results/04_models/XGBC_none_t5_balanced_accuracy_max.joblib") #this will be removed
+# test_preds, test_labels= predict_test_set(best_model, rf_test_data, 'XGBC', 'none','t5','max_RF','accuracy')
+# calc_accuracy(test_preds, test_labels,'test','XGBC','none','t5','max_RF','accuracy')
+
+
+#BALANCED ACCURACY
+# Hyp optimization and model selection
+# best_params,best_cv_results, best_model = tune_group_oversampling('XGBC', rf_train_data, 'none', 't5', 'balanced_accuracy','max_RF')
+# ## Feature importance and training set predictions
+
+#IMPORT MODEL - THIS WILL BE REMOVED
+best_params = joblib.load("results/04_models/balanced_accuracy/XGBC_none_t5_max_RF.joblib") #this will be removed
+##
+train_preds, train_labels, feature_importances= cross_model_balanced_blocked(rf_train_data, best_params, rf_label_df,'none','t5','XGBC', 'max_RF', 'balanced_accuracy')
+# calc_accuracy(train_preds, train_labels,'training','XGBC','none','t5','max_RF','balanced_accuracy')
+# #Predicting the test set
+# #Import model - optional
+# #xgbc_best_model_none_t5_max = joblib.load("results/04_models/XGBC_none_t5_balanced_accuracy_max.joblib") #this will be removed
+# test_preds, test_labels= predict_test_set(best_model, rf_test_data, 'XGBC', 'none','t5','max_RF','balanced_accuracy')
+# calc_accuracy(test_preds, test_labels,'test','XGBC','none','t5','max_RF','balanced_accuracy')
+#Create fasta file with important features
+#create_fasta(feature_importances,'XGBC','none','t5','max_RF','balanced_accuracy')
 
 
 
