@@ -38,7 +38,7 @@ from sklearn.preprocessing import OneHotEncoder
 # model evaluation
 from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, f1_score
 from sklearn.metrics import roc_curve, auc,  RocCurveDisplay
-from yellowbrick.classifier import ClassificationReport, ROCAUC, ClassBalance,  ConfusionMatrix
+#from yellowbrick.classifier import ClassificationReport, ROCAUC, ClassBalance,  ConfusionMatrix
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.metrics import classification_report
 
@@ -46,19 +46,19 @@ from sklearn.metrics import classification_report
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import StratifiedKFold
-from yellowbrick.model_selection import CVScores
-from yellowbrick.model_selection import RFECV
+#from yellowbrick.model_selection import CVScores
+#from yellowbrick.model_selection import RFECV
 from sklearn.model_selection import cross_val_score
 
-from imblearn.over_sampling import RandomOverSampler
-from imblearn.pipeline import Pipeline
-from imblearn.over_sampling import SMOTE
+#from imblearn.over_sampling import RandomOverSampler
+#from imblearn.pipeline import Pipeline
+#from imblearn.over_sampling import SMOTE
 
 ###### ------- MUVR ------- ######
 from py_muvr.feature_selector import FeatureSelector
 from concurrent.futures import ProcessPoolExecutor
 
-import shap
+#import shap
 
 
 def usage():
@@ -276,6 +276,13 @@ def feature_reduction(train_data_muvr,chisq_file):
 
     X_muvr = model_input.drop('SYMP', axis = 1).to_numpy()
     y_muvr = model_input['SYMP'].values.ravel()
+    
+    #For XGboost - Encode output variable as onehot
+    encoder = OneHotEncoder(sparse=False)
+
+    # Reshape y to a 2D array as fit_transform expects a 2D array
+    y_encoded = encoder.fit_transform(np.array(y_muvr).reshape(-1, 1))
+
 
     feature_names = model_input.drop(columns=["SYMP"]).columns
 
@@ -289,7 +296,7 @@ def feature_reduction(train_data_muvr,chisq_file):
         features_dropout_rate=0.9
     )
 
-    feature_selector.fit(X_muvr, y_muvr)
+    feature_selector.fit(X_muvr, y_encoded)
     selected_features = feature_selector.get_selected_features(feature_names=feature_names)
 
     # Obtain a dataframe containing MUVR selected features
@@ -298,9 +305,9 @@ def feature_reduction(train_data_muvr,chisq_file):
     df_muvr_max = model_input[to_predict+list(selected_features.max)]
 
     
-    df_muvr_min.to_csv(r'2023_jp_muvr_min.tsv', sep='\t')
-    df_muvr_mid.to_csv(r'2023_jp_muvr_mid.tsv', sep='\t')
-    df_muvr_max.to_csv(r'2023_jp_muvr_max.tsv', sep='\t')
+    df_muvr_min.to_csv(r'2023_jp_muvr_xgbc_min.tsv', sep='\t')
+    df_muvr_mid.to_csv(r'2023_jp_muvr_xgbc_mid.tsv', sep='\t')
+    df_muvr_max.to_csv(r'2023_jp_muvr_xgbc_max.tsv', sep='\t')
 
     return df_muvr_max
 
@@ -320,9 +327,9 @@ def feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_
     max_chisq_data = pd.read_csv(chisq_file, sep='\t', header=0, index_col=0, usecols=max_features_columns)
 
 
-    min_chisq_data.to_csv(r'2023_jp_complete_muvr_min.tsv', sep='\t')
-    mid_chisq_data.to_csv(r'2023_jp_complete_muvr_mid.tsv', sep='\t')
-    max_chisq_data.to_csv(r'2023_jp_complete_muvr_max.tsv', sep='\t')
+    min_chisq_data.to_csv(r'2023_jp_complete_muvr_xgbc_min.tsv', sep='\t')
+    mid_chisq_data.to_csv(r'2023_jp_complete_muvr_xgbc_mid.tsv', sep='\t')
+    max_chisq_data.to_csv(r'2023_jp_complete_muvr_xgbc_max.tsv', sep='\t')
 
 
 def simple_rf(label_kmer_df):
@@ -1006,14 +1013,14 @@ def calc_accuracy(preds, labels):
 
 #3. MUVR step
  #This will have to be run on an HPC (size of chisq_file=4GBs)
-train_data_muvr, chisq_file= get_opts_muvr()
+#train_data_muvr, chisq_file= get_opts_muvr()
 #print ("MUVR feature reduction")
-feature_df = feature_reduction(train_data_muvr, chisq_file)
+#feature_df = feature_reduction(train_data_muvr, chisq_file)
 
 #4. FEATURE EXTRACTION STEP
     #Extract relevant features from all samples
-#min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file = get_opts_extract()
-#feature_df = feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file)
+min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file = get_opts_extract()
+feature_df = feature_extraction(min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, chisq_file)
 
 #5. LOAD AND WRANGLE TRAIN DATA FOR RF
 #print ("load training data")
