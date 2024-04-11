@@ -169,7 +169,7 @@ train_data_muvr=prepare_data_muvr(train_data)
  #model can refer to: "RFC" or "XGBC"
 print ("MUVR feature reduction")
 #class_type can be: binary, multilabel
-min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file, feature_df = feature_reduction(train_data_muvr, chisq_file, "RFC", "multilabel")
+min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file = feature_reduction(train_data_muvr, chisq_file, "RFC", "multilabel")
 
 #4. FEATURE EXTRACTION STEP
     #Extract relevant features from all samples
