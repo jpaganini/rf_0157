@@ -1,33 +1,17 @@
 import numpy as np
-import random
-from collections import Counter
-import itertools
-from scipy import interp
-from itertools import cycle
-import sys
 import math
+import sys
+
 
 # pandas
 import pandas as pd
 
 from sklearn.preprocessing import OneHotEncoder
 
-
-
-# model evaluation
-from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, f1_score
-from sklearn.metrics import roc_curve, auc,  RocCurveDisplay
-from yellowbrick.classifier import ClassificationReport, ROCAUC, ClassBalance,  ConfusionMatrix
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-from sklearn.metrics import classification_report
-
-#saving models
-import joblib
-
-
 ###### ------- MUVR ------- ######
 from py_muvr.feature_selector import FeatureSelector
 from concurrent.futures import ProcessPoolExecutor
+
 def get_opts_muvr():
     if len(sys.argv) != 4:
         usage()
@@ -48,7 +32,7 @@ def prepare_data_muvr(train_data):
 def feature_reduction(train_data_muvr,chisq_file, model,class_type):
 
     #train_data_muvr = pd.read_csv(train_data_muvr, sep='\t', header=0)
-    train_data_muvr= train_data_muvr.set_index('SRA')
+    #train_data_muvr= train_data_muvr.set_index('SRA')
     if class_type == 'multilabel':
         columns_to_drop = ['MOLIS', 'LINEAGE','STX','SNP ADDRESS','t5','SYMP H/L']  # Replace with the actual column names
     else:
@@ -61,6 +45,7 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type):
     # Create a dataframe to hold the results
     model_input = pd.DataFrame()
 
+    print("Loading chisq feateres")
     # Get the first line of chisq_features
     try:
         chunk_chisq = next(reader_chisq)
@@ -90,7 +75,7 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type):
         feature_names = model_input.drop(columns=["SYMP"]).columns
 
     else:
-        to_predict = ['SYMP']
+        to_predict = ['SYMP H/L']
         X_muvr = model_input.drop('SYMP H/L', axis = 1).to_numpy()
         y_muvr = model_input['SYMP H/L'].values.ravel()
         feature_names = model_input.drop(columns=["SYMP H/L"]).columns
@@ -119,6 +104,7 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type):
         features_dropout_rate=0.9
     )
 
+    print("Running MUVR")
     feature_selector.fit(X_muvr, y_variable)
     selected_features = feature_selector.get_selected_features(feature_names=feature_names)
 
@@ -138,8 +124,8 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type):
     return df_muvr_min,df_muvr_mid,df_muvr_max
 
 def feature_extraction(muvr_features_file_draft, chisq_file, model, class_type, feature_size):
-    features_columns = pd.read_csv(muvr_features_file_draft, sep='\t', header=0, index_col=0).columns[1:].tolist()
-
+    #features_columns = pd.read_csv(muvr_features_file_draft, sep='\t', header=0, index_col=0).columns[1:].tolist()
+    features_columns=muvr_features_file_draft.columns[1:].tolist() 
     #Get column names
     features_columns = ['Unnamed: 0'] + features_columns
 
@@ -169,7 +155,7 @@ train_data_muvr=prepare_data_muvr(train_data)
  #model can refer to: "RFC" or "XGBC"
 print ("MUVR feature reduction")
 #class_type can be: binary, multilabel
-min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file = feature_reduction(train_data_muvr, chisq_file, "RFC", "multilabel")
+min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file = feature_reduction(train_data_muvr, chisq_file, "RFC", "binary")
 
 #4. FEATURE EXTRACTION STEP
     #Extract relevant features from all samples
@@ -185,4 +171,4 @@ feature_extraction(min_muvr_filtered_file,chisq_file,"RFC","binary","min")
 #Mid features
 feature_extraction(mid_muvr_filtered_file,chisq_file,"RFC","binary","mid")
 #Max Features
-feature_df = feature_extraction(max_muvr_filtered_file,chisq_file,"RFC","binary","max")
+feature_extraction(max_muvr_filtered_file,chisq_file,"RFC","binary","max")
