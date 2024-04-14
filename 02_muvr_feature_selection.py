@@ -26,8 +26,8 @@ import joblib
 
 
 ###### ------- MUVR ------- ######
-from py_muvr.feature_selector import FeatureSelector
-from concurrent.futures import ProcessPoolExecutor
+#from py_muvr.feature_selector import FeatureSelector
+#from concurrent.futures import ProcessPoolExecutor
 def get_opts_muvr():
     if len(sys.argv) != 4:
         usage()
@@ -41,18 +41,19 @@ def prepare_data_muvr(train_data):
     train_data_muvr = train_data_df.sort_index().drop_duplicates(subset=['t5', 'SYMP'],
                                                        keep='last')  # remove samples that contain a +
 
-    train_data_muvr.to_csv(r'data/02_test_train_split/2023_train_data_filtered_test.tsv', sep='\t')
+    train_data_muvr.to_csv(r'data/02_test_train_split/2023_train_data_filtered_extra_test.tsv', sep='\t')
 
     return train_data_muvr
 
 def feature_reduction(train_data_muvr,chisq_file, model,class_type):
 
     #train_data_muvr = pd.read_csv(train_data_muvr, sep='\t', header=0)
-    train_data_muvr= train_data_muvr.set_index('SRA')
+    #train_data_muvr= train_data_muvr.set_index('SRA')
     if class_type == 'multilabel':
         columns_to_drop = ['MOLIS', 'LINEAGE','STX','SNP ADDRESS','t5','SYMP H/L']  # Replace with the actual column names
     else:
         columns_to_drop = ['MOLIS', 'LINEAGE', 'STX', 'SNP ADDRESS', 't5', 'SYMP']
+
     train_data_muvr = train_data_muvr.drop(columns=columns_to_drop)
 
     # Create an iterator for reading chisq_features line by line
@@ -169,7 +170,7 @@ train_data_muvr=prepare_data_muvr(train_data)
  #model can refer to: "RFC" or "XGBC"
 print ("MUVR feature reduction")
 #class_type can be: binary, multilabel
-min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file = feature_reduction(train_data_muvr, chisq_file, "RFC", "multilabel")
+min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file = feature_reduction(train_data_muvr, chisq_file, "RFC", "binary")
 
 #4. FEATURE EXTRACTION STEP
     #Extract relevant features from all samples
@@ -185,4 +186,4 @@ feature_extraction(min_muvr_filtered_file,chisq_file,"RFC","binary","min")
 #Mid features
 feature_extraction(mid_muvr_filtered_file,chisq_file,"RFC","binary","mid")
 #Max Features
-feature_df = feature_extraction(max_muvr_filtered_file,chisq_file,"RFC","binary","max")
+feature_extraction(max_muvr_filtered_file,chisq_file,"RFC","binary","max")
