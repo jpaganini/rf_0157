@@ -85,16 +85,11 @@ def get_opts():
 
 def split_dataset(meta_file):
         RSEED=50
-        #Load the features table
-        #label_kmer_df = pd.read_csv(feature_file, sep='\t', header=0, index_col=0) - #REMOVED WHEN MUVR
-        #label_kmer_df = label_kmer_df.drop('SYMP',axis=1) - #REMOVED WHEN MUVR
 
         #load the metadata
         metadata = pd.read_csv(meta_file, sep='\t', header=0)
         metadata = metadata.set_index('SRA')
         #metadata=metadata.iloc[:,:16] - #REMOVED WHEN MUVR
-
-        #all_pd = pd.merge(label_kmer_df, metadata, left_index=True, right_index=True) - #REMOVED WHEN MUVR
 
         #Create new dataframes for each sublineage
         lineage_categories = metadata['LINEAGE'].unique()
