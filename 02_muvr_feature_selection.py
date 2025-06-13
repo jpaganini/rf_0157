@@ -1,42 +1,50 @@
 import numpy as np
-import math
 import sys
-
-
-# pandas
+import os
+import argparse
 import pandas as pd
-
 from sklearn.preprocessing import OneHotEncoder
-
-###### ------- MUVR ------- ######
 from py_muvr.feature_selector import FeatureSelector
-from concurrent.futures import ProcessPoolExecutor
+
+
+TARGET_COLUMNS = {
+    'binary': 'SYMP H/L',
+    'multilabel': 'SYMP'
+}
 
 def get_opts_muvr():
-    if len(sys.argv) != 4:
-        usage()
-    else:
-        return sys.argv[1], sys.argv[2], sys.argv[3]
+    parser = argparse.ArgumentParser(description="Run MUVR-based feature selection on input data.")
+    parser.add_argument('--train_data', type=str, required=True, help='Path to training data TSV')
+    parser.add_argument('--chisq_file', type=str, required=True, help='Path to chisq features TSV')
+    parser.add_argument('--model', type=str, choices=['RFC', 'XGBC'], required=True, help='Model to use: RFC or XGBC')
+    parser.add_argument('--class_type', type=str, choices=['binary', 'multilabel'], default='binary',
+                        help='Type of classification')
+    parser.add_argument('--output', type=str, required=True, help='Output directory for storing results')
+    parser.add_argument('--filtered_train_dir', type=str, required=True, help='Directory to save the filtered training data (after deduplication)')
+    parser.add_argument('--name', type=str, required=True, help='Base filename for outputs')
 
-def prepare_data_muvr(train_data):
+    args = parser.parse_args()
+    return args.train_data, args.chisq_file, args.model, args.class_type, args.output, args.filtered_train_dir, args.name
+
+def prepare_data_muvr(train_data, filtered_dir):
 
     train_data_df = pd.read_csv(train_data, sep='\t', header=0, index_col=0)
 
     train_data_muvr = train_data_df.sort_index().drop_duplicates(subset=['t5', 'SYMP'],
                                                        keep='last')  # remove samples that contain a +
 
-    train_data_muvr.to_csv(r'data/02_test_train_split/2023_train_data_filtered_extra_test.tsv', sep='\t')
+    # Ensure parent directory exists
+    os.makedirs(filtered_dir, exist_ok=True)
+    filtered_output_path = os.path.join(filtered_dir, f"{name}.tsv")
+
+    train_data_muvr.to_csv(filtered_output_path, sep='\t')
 
     return train_data_muvr
 
-def feature_reduction(train_data_muvr,chisq_file, model,class_type):
+def feature_reduction(train_data_muvr,chisq_file, model,class_type, output_dir,name):
 
-    #train_data_muvr = pd.read_csv(train_data_muvr, sep='\t', header=0)
-    #train_data_muvr= train_data_muvr.set_index('SRA')
-    if class_type == 'multilabel':
-        columns_to_drop = ['MOLIS', 'LINEAGE','STX','SNP ADDRESS','t5','SYMP H/L']  # Replace with the actual column names
-    else:
-        columns_to_drop = ['MOLIS', 'LINEAGE', 'STX', 'SNP ADDRESS', 't5', 'SYMP']
+    target_col = TARGET_COLUMNS[class_type]
+    train_data_muvr = train_data_muvr[[target_col]]
 
     train_data_muvr = train_data_muvr.drop(columns=columns_to_drop)
 
@@ -76,6 +84,7 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type):
         feature_names = model_input.drop(columns=["SYMP"]).columns
 
     else:
+        print("Binary")
         to_predict = ['SYMP H/L']
         X_muvr = model_input.drop('SYMP H/L', axis = 1).to_numpy()
         y_muvr = model_input['SYMP H/L'].values.ravel()
@@ -92,9 +101,7 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type):
         y_variable = y_muvr
 
     else:
-        print ("Select a valid model: RFC or XBGC")
-        SystemExit
-
+        sys.exit("Select a valid model: RFC or XGBC")
 
     feature_selector = FeatureSelector(
         n_repetitions=10,
@@ -115,11 +122,14 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type):
     df_muvr_max = model_input[to_predict+list(selected_features.max)]
 
     #Write features to a new file.
-    min_features_file_name = f'data/03_muvr_features/{class_type}/2023_jp_muvr_{model}_min.tsv'  # Using f-string formatting
+    output_path = os.path.join(output_dir, class_type)
+    os.makedirs(output_path, exist_ok=True)
+    min_features_file_name = os.path.join(output_path, f'{name}_muvr_{model}_min.tsv')
+    mid_features_file_name = os.path.join(output_path, f'{name}_muvr_{model}_mid.tsv')
+    max_features_file_name = os.path.join(output_path, f'{name}_muvr_{model}_max.tsv')
+
     df_muvr_min.to_csv(min_features_file_name, sep='\t')
-    mid_features_file_name = f'data/03_muvr_features/{class_type}/2023_jp_muvr_{model}_mid.tsv'  # Using f-string formatting
     df_muvr_mid.to_csv(mid_features_file_name, sep='\t')
-    max_features_file_name = f'data/03_muvr_features/{class_type}/2023_jp_muvr_{model}_max.tsv'  # Using f-string formatting
     df_muvr_max.to_csv(max_features_file_name, sep='\t')
 
     return df_muvr_min,df_muvr_mid,df_muvr_max
@@ -143,20 +153,16 @@ def feature_extraction(muvr_features_file_draft, chisq_file, model, class_type, 
 #                  MAIN                               #
 #
 #######################################################
-#1. Load the data needed to run the model
-train_data, chisq_file,model= get_opts_muvr()
+if __name__ == "__main__":
+    train_data, chisq_file, model, class_type, output_dir,filtered_train_dir, name = get_opts_muvr()
 
-#1. Create a sub-set of the train set, which will be used for doing muvr.
-#In this subset, only one isolate within the same t5 cluster are retained
-print("Filtering data")
-train_data_muvr=prepare_data_muvr(train_data)
+    print("Filtering data")
+    train_data_muvr = prepare_data_muvr(train_data, filtered_train_dir, name)
 
-#2. MUVR step
- #This will have to be run on an HPC (size of chisq_file=4GBs)
- #model can refer to: "RFC" or "XGBC"
-print ("MUVR feature reduction")
-#class_type can be: binary, multilabel
-min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file = feature_reduction(train_data_muvr, chisq_file, "RFC", "binary")
+    print("MUVR feature reduction")
+    min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file = feature_reduction(
+        train_data_muvr, chisq_file, model, class_type, output_dir, name)
+
 
 #4. FEATURE EXTRACTION STEP
     #Extract relevant features from all samples
@@ -168,9 +174,9 @@ min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file = feature
 #feature_df = feature_extraction(max_muvr_filtered_file,chisq_file,"RFC","multilabel","max")
 #4.2 BINARY LABELS
 #Min features
-feature_extraction(min_muvr_filtered_file,chisq_file,"RFC","binary","min")
+#feature_extraction(min_muvr_filtered_file,chisq_file,"RFC","binary","min")
 #Mid features
-feature_extraction(mid_muvr_filtered_file,chisq_file,"RFC","binary","mid")
+#feature_extraction(mid_muvr_filtered_file,chisq_file,"RFC","binary","mid")
 #Max Features
-feature_extraction(max_muvr_filtered_file,chisq_file,"RFC","binary","max")
+#feature_extraction(max_muvr_filtered_file,chisq_file,"RFC","binary","max")
 
