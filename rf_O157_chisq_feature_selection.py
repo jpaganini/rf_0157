@@ -1,185 +1,105 @@
- #imports
+import os
 import sys
-#from os import system
-from datetime import datetime
-import numpy as np
-#from math import sin, cos, sqrt, atan2, radians
-#from pyproj import Proj, transform
 import pandas as pd
-#from matplotlib import pyplot
-import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
-from sklearn.feature_selection import chi2
-from sklearn.feature_selection import SelectKBest
-from numpy import array 
+from sklearn.feature_selection import chi2, SelectKBest
+import argparse
 
 
 ########## FUNCTIONS ###############
 
-
-def usage():
-
-    sys.exit()
-
 def get_opts():
-    if len(sys.argv) != 4:
-        usage()
-    else:
-        return sys.argv[1], sys.argv[2], sys.argv[3]
-
+    parser = argparse.ArgumentParser(description="Chi2 feature selection from genomic data.")
+    parser.add_argument('--meta', required=True, help='Path to metadata file (TSV with columns SRA, SYMP)')
+    parser.add_argument('--features1', required=True, help='Path to first feature matrix (TSV)')
+    parser.add_argument('--features2', required=True, help='Path to second feature matrix (TSV)')
+    parser.add_argument('--output_dir', required=True, help='Directory to write output files')
+    parser.add_argument('--name', required=True, help='Base name for output files (no extension)')
+    parser.add_argument('--length_threshold', type=int, default=80, help='Minimum column name length to keep')
+    return parser.parse_args()
 
 
 def read_meta(meta_file):
     all_pd = pd.read_csv(meta_file, sep='\t', header=0)
     all_pd = all_pd[['SRA', 'SYMP']]
+    return all_pd.set_index('SRA')
 
-    #sym_dict  = all_pd.groupby("SYMP")["SRA"].apply(list).to_dict()
+def load_and_filter_features(feature_file, length_threshold):
+    print(f"Loading {feature_file}")
+    df = pd.read_csv(feature_file, sep='\t', header=0, index_col=0)
+    df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
 
-    all_pd = all_pd.set_index('SRA')
-    return all_pd
+    # Binarize
+    df[df > 0] = 1
+    df = df.T
 
-def read_features(feature_file1, feature_file2, meta_pd):
-    
-    print ("load dataframe 1")
+    # Filter by k-mer length
+    long_cols = [col for col in df.columns if len(col) >= length_threshold]
+    df = df[long_cols]
 
-    all_pd = pd.read_csv(feature_file1, sep='\t', header=0, index_col=0)
-    all_pd = all_pd.loc[:, ~all_pd.columns.str.contains('^Unnamed')]
-    #set >0 values to 1
-    all_pd[all_pd > 0] = 1
-    all_pd = all_pd.T
+    # Reduce memory usage
+    df = df.astype('int8')
+    return df.T
 
-    print ("get long columns")
-    to_keep = []
-    for i in all_pd.columns:
-        if len(i) >= 80:
-            to_keep.append(i)   
-    # change dataframe to include those kmers only 
-    all_pd = all_pd[to_keep]
+def merge_feature_sets(df1, df2):
+    # Identify missing rows in each
+    to_add1 = set(df1.index) - set(df2.index)
+    to_add2 = set(df2.index) - set(df1.index)
 
+    # Fill missing rows with 0s
+    df1 = pd.concat([df1, pd.DataFrame(0, index=to_add2, columns=df1.columns).astype("int8")])
+    df2 = pd.concat([df2, pd.DataFrame(0, index=to_add1, columns=df2.columns).astype("int8")])
 
+    # Inner join on index
+    return df1.join(df2, how='inner')
 
-    all_pd.info(memory_usage = "deep")
-    icols = all_pd.select_dtypes('integer').columns
-    all_pd = all_pd.astype("int8")
-    all_pd.info(memory_usage = "deep")
-
-    print ("load dataframe 2")
-
-    all_pd2 = pd.read_csv(feature_file2, sep='\t', header=0, index_col=0)
-    all_pd2 = all_pd2.loc[:, ~all_pd2.columns.str.contains('^Unnamed')]
-    #set >0 values to 1
-    all_pd2[all_pd2 > 0] = 1
-    all_pd2 = all_pd2.T
-
-    print ("get long columns")
-
-    to_keep2 = []
-    for i in all_pd2.columns:
-        if len(i) >= 80:
-            to_keep2.append(i)   
-    # change dataframe to include those kmers only 
-    all_pd2 = all_pd2[to_keep2]
-
-    all_pd2.info(memory_usage = "deep")
-    icols = all_pd2.select_dtypes('integer').columns
-    all_pd2 = all_pd2.astype("int8")
-    all_pd2.info(memory_usage = "deep")
-
-    all_pd = all_pd.T
-    all_pd2 = all_pd2.T
-
-    
-    print ("create empty dfs")
-
-    pd1_index = list(all_pd.index.values)
-    pd2_index = list(all_pd2.index.values)
-    to_add1 = set(pd1_index) - set(pd2_index)
-    to_add2 = set(pd2_index) - set(pd1_index)
-    df_temp = pd.DataFrame(columns=all_pd.columns.to_list(), index=list(to_add2))
-    df_temp = df_temp.fillna(0).astype("int8")
-    df_temp2 = pd.DataFrame(columns=all_pd2.columns.to_list(), index=list(to_add1))
-    df_temp2 = df_temp2.fillna(0).astype("int8")  
-
-
-    print ("add dfs to Original dfs")
-
-    pd_merge1=pd.concat([all_pd, df_temp], axis=0)
-    pd_merge2=pd.concat([all_pd2, df_temp2], axis=0)
-
-
-    print ("Merge new dataframe")
-
-    # pandas join two DataFrames
-    pd3=pd_merge1.join(pd_merge2, how='inner')
-    pd3.info(memory_usage = "deep")   
-
-    pd3 = pd3.T
-
-    print ("merge meta")
-
-    merge_pd =pd.merge(pd3,meta_pd, left_index=True, right_index=True)
-    merge_pd.info(memory_usage = "deep")
-
-
+def perform_chi2_analysis(merged_df, output_dir, name):
     label_encoder = LabelEncoder()
-    merge_pd['SYMP'] = label_encoder.fit_transform(merge_pd['SYMP'])
- 
-    #shuffle columns
-    #merge_pd = merge_pd[np.random.default_rng(seed=42).permutation(merge_pd.columns.values)]
+    merged_df['SYMP'] = label_encoder.fit_transform(merged_df['SYMP'])
 
+    X = merged_df.drop('SYMP', axis=1)
+    y = merged_df['SYMP']
 
-    print ("do chi2")
+    chi_scores = chi2(X, y)
 
+    # Select top 100k features
+    selector = SelectKBest(chi2, k=100_000)
+    X_kbest = selector.fit_transform(X, y)
+    selected_features = X.columns[selector.get_support()]
 
-    res = []
+    print(f'Original feature count: {X.shape[1]}')
+    print(f'Reduced feature count (top 100k): {X_kbest.shape[1]}')
 
+    # Save top 100k features
+    os.makedirs(output_dir, exist_ok=True)
+    out_100k = os.path.join(output_dir, f'{name}_100k.tsv')
+    merged_df[selected_features].to_csv(out_100k, sep='\t')
 
-    X = merge_pd.drop('SYMP',axis=1)
-    y = merge_pd['SYMP']
+    # Save p-value filtered features (p ≤ 0.05)
+    p_values = pd.Series(chi_scores[1], index=X.columns)
+    good_cols = p_values[p_values <= 0.05].index
+    out_pval = os.path.join(output_dir, f'{name}_pvalue.tsv')
+    merged_df[good_cols].to_csv(out_pval, sep='\t')
 
-    chi_scores = chi2(X,y)
-        
-    #print (chi_scores)
+    print(f'Saved top 100k features to: {out_100k}')
+    print(f'Saved p ≤ 0.05 features to: {out_pval}')
 
-    # Two features with highest chi-squared statistics are selected
-    chi2_features = SelectKBest(chi2, k = 100000)
-    X_kbest_features = chi2_features.fit_transform(X, y)
-      
-    # Reduced features
-    print('Original feature number:', X.shape[1])
-    print('Reduced feature number:', X_kbest_features.shape[1])
+########### MAIN #############
 
+if __name__ == "__main__":
+    args = get_opts()
 
-    filter = chi2_features.get_support()
-    features = array(X.columns)
+    meta_df = read_meta(args.meta)
+    features1 = load_and_filter_features(args.features1, args.length_threshold)
+    features2 = load_and_filter_features(args.features2, args.length_threshold)
 
-    #print (features[filter])
+    combined = merge_feature_sets(features1, features2)
+    combined = combined.T
 
-    good_df_100k = merge_pd[features[filter]]
-    good_df_100k.to_csv(r'all_chisq_100k.tsv', sep='\t')
+    print("Merging with metadata")
+    merged_with_meta = pd.merge(combined, meta_df, left_index=True, right_index=True)
 
-    p_values = pd.Series(chi_scores[1],index = X.columns)
-    p_values.sort_values(ascending = True , inplace = True)
+    perform_chi2_analysis(merged_with_meta, args.output_dir, args.name)
 
-    good_df_pvalue = merge_pd[p_values[p_values<=0.05].index.to_list()]
-    good_df_pvalue.to_csv(r'all_chisq_pvalue.tsv', sep='\t')
-
-
-    #print(p_values<=0.05)
-
-
-    #with open("chi_features.txt", "w") as txt_file:
-    #    for line in features[filter]:
-    #        txt_file.write(line + "\n")
-
-############ MAIN #############
-
-
-
-meta_file, feature_file1, feature_file2  = get_opts()
-
-all_pd = read_meta(meta_file)
-
-read_features(feature_file1, feature_file2, all_pd)
 
 
