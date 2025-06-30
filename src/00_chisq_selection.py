@@ -5,6 +5,34 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.feature_selection import chi2, SelectKBest
 import argparse
 
+# ----------------------------------------------------------------------
+# Script: 00_chisq_selection.py
+#
+# Purpose:
+#     Perform Chi-squared feature selection on genomic k-mer data.
+#
+# Inputs:
+#     --meta:       Path to metadata file (TSV containing sample identifier and label columns).
+#     --features1:  Path to first feature matrix (TSV, k-mer counts).
+#     --features2:  Path to second feature matrix (TSV, k-mer counts) [optional].
+#
+# Parameters:
+#     --length_threshold:  Minimum k-mer string length to retain (default: 80).
+#     --id:                Column name in metadata for sample identifiers (default: 'SRA').
+#     --label:             Column name in metadata for target labels (default: 'SYMP').
+#     --name:              Base name for output files (no extension).
+#
+# Outputs (written to --output_dir):
+#     <name>_100k.tsv    Top 100,000 features selected by Chi-squared score.
+#     <name>_pvalue.tsv  Features with p-value ≤ 0.05.
+#
+# Usage Example:
+#     python chi2_feature_selection.py --meta meta.tsv \
+#         --features1 feats1.tsv --features2 feats2.tsv \
+#         --output_dir results/ --name study1
+# ----------------------------------------------------------------------
+
+
 
 ########## FUNCTIONS ###############
 
@@ -12,17 +40,19 @@ def get_opts():
     parser = argparse.ArgumentParser(description="Chi2 feature selection from genomic data.")
     parser.add_argument('--meta', required=True, help='Path to metadata file (TSV with columns SRA, SYMP)')
     parser.add_argument('--features1', required=True, help='Path to first feature matrix (TSV)')
-    parser.add_argument('--features2', required=True, help='Path to second feature matrix (TSV)')
+    parser.add_argument('--features2', required=False, help='Path to second feature matrix (TSV)')
     parser.add_argument('--output_dir', required=True, help='Directory to write output files')
     parser.add_argument('--name', required=True, help='Base name for output files (no extension)')
     parser.add_argument('--length_threshold', type=int, default=80, help='Minimum column name length to keep')
+    parser.add_argument('--id', dest='id_col', default='SRA', help="Metadata column name for sample IDs (default: 'SRA')")
+    parser.add_argument('--label', dest='label_col', default='SYMP', help="Metadata column name for labels (default: 'SYMP')")
     return parser.parse_args()
 
 
-def read_meta(meta_file):
+def read_meta(meta_file, id_col, label_col):
     all_pd = pd.read_csv(meta_file, sep='\t', header=0)
-    all_pd = all_pd[['SRA', 'SYMP']]
-    return all_pd.set_index('SRA')
+    all_pd = all_pd[[id_col, label_col]]
+    return all_pd.set_index(id_col)
 
 def load_and_filter_features(feature_file, length_threshold):
     print(f"Loading {feature_file}")
@@ -53,12 +83,12 @@ def merge_feature_sets(df1, df2):
     # Inner join on index
     return df1.join(df2, how='inner')
 
-def perform_chi2_analysis(merged_df, output_dir, name):
+def perform_chi2_analysis(merged_df, label_col, output_dir, name):
     label_encoder = LabelEncoder()
-    merged_df['SYMP'] = label_encoder.fit_transform(merged_df['SYMP'])
+    merged_df[label_col] = label_encoder.fit_transform(merged_df[label_col])
 
-    X = merged_df.drop('SYMP', axis=1)
-    y = merged_df['SYMP']
+    X = merged_df.drop(label_col, axis=1)
+    y = merged_df[label_col]
 
     chi_scores = chi2(X, y)
 
@@ -89,17 +119,25 @@ def perform_chi2_analysis(merged_df, output_dir, name):
 if __name__ == "__main__":
     args = get_opts()
 
-    meta_df = read_meta(args.meta)
-    features1 = load_and_filter_features(args.features1, args.length_threshold)
-    features2 = load_and_filter_features(args.features2, args.length_threshold)
+    # Load metadata with flexible column names
+    meta_df = read_meta(args.meta, args.id_col, args.label_col)
 
-    combined = merge_feature_sets(features1, features2)
+    # Load and filter feature matrices
+
+    features1 = load_and_filter_features(args.features1, args.length_threshold)
+    if args.features2:
+        features2 = load_and_filter_features(args.features2, args.length_threshold)
+        combined = merge_feature_sets(features1, features2)
+    else:
+        print("No second feature file provided; using only features1")
+        combined = features1.copy()
+
     combined = combined.T
 
     print("Merging with metadata")
     merged_with_meta = pd.merge(combined, meta_df, left_index=True, right_index=True)
 
-    perform_chi2_analysis(merged_with_meta, args.output_dir, args.name)
+    perform_chi2_analysis(merged_with_meta, args.label_col, args.output_dir, args.name)
 
 
 

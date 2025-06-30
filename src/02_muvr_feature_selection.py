@@ -134,20 +134,6 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type, output_dir,n
 
     return df_muvr_min,df_muvr_mid,df_muvr_max
 
-def feature_extraction(muvr_features_file_draft, chisq_file, model, class_type, feature_size):
-    #features_columns = pd.read_csv(muvr_features_file_draft, sep='\t', header=0, index_col=0).columns[1:].tolist()
-    features_columns=muvr_features_file_draft.columns[1:].tolist() 
-    #Get column names
-    features_columns = ['Unnamed: 0'] + features_columns
-
-    #Get data from chisq file
-    chisq_data = pd.read_csv(chisq_file, sep='\t', header=0, index_col=0, usecols=features_columns)
-
-    #Write the data
-    complete_features_file_name = f'data/03_muvr_features/{class_type}/2023_jp_muvr_complete_{model}_{feature_size}.tsv'  # Using f-string formatting
-    chisq_data.to_csv(complete_features_file_name, sep='\t')
-
-
 #######################################################
 #
 #                  MAIN                               #
@@ -164,19 +150,4 @@ if __name__ == "__main__":
         train_data_muvr, chisq_file, model, class_type, output_dir, name)
 
 
-#4. FEATURE EXTRACTION STEP
-    #Extract relevant features from all samples
-#4.1 MULTILABEL
-#feature_extraction(min_muvr_filtered_file,chisq_file,"RFC","multilabel","min")
-#Mid features
-#feature_extraction(mid_muvr_filtered_file,chisq_file,"RFC","multilabel","mid")
-#Max Features
-#feature_df = feature_extraction(max_muvr_filtered_file,chisq_file,"RFC","multilabel","max")
-#4.2 BINARY LABELS
-#Min features
-#feature_extraction(min_muvr_filtered_file,chisq_file,"RFC","binary","min")
-#Mid features
-#feature_extraction(mid_muvr_filtered_file,chisq_file,"RFC","binary","mid")
-#Max Features
-#feature_extraction(max_muvr_filtered_file,chisq_file,"RFC","binary","max")
 
