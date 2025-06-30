@@ -6,7 +6,7 @@ from sklearn.feature_selection import chi2, SelectKBest
 import argparse
 
 # ----------------------------------------------------------------------
-# Script: 00_chisq_selection.py
+# Script: 01_chisq_selection.py
 #
 # Purpose:
 #     Perform Chi-squared feature selection on genomic k-mer data.
@@ -20,14 +20,16 @@ import argparse
 #     --length_threshold:  Minimum k-mer string length to retain (default: 80).
 #     --id:                Column name in metadata for sample identifiers (default: 'SRA').
 #     --label:             Column name in metadata for target labels (default: 'SYMP').
+#     --k:                 Number of top features to select (default: 100000).
 #     --name:              Base name for output files (no extension).
 #
 # Outputs (written to --output_dir):
 #     <name>_100k.tsv    Top 100,000 features selected by Chi-squared score.
 #     <name>_pvalue.tsv  Features with p-value ≤ 0.05.
+#     <name>_feature_pvalues.tsv    Table of all features and their p-values.
 #
 # Usage Example:
-#     python chi2_feature_selection.py --meta meta.tsv \
+#     python 01_chisq_selection.py --meta meta.tsv \
 #         --features1 feats1.tsv --features2 feats2.tsv \
 #         --output_dir results/ --name study1
 # ----------------------------------------------------------------------
@@ -46,6 +48,7 @@ def get_opts():
     parser.add_argument('--length_threshold', type=int, default=80, help='Minimum column name length to keep')
     parser.add_argument('--id', dest='id_col', default='SRA', help="Metadata column name for sample IDs (default: 'SRA')")
     parser.add_argument('--label', dest='label_col', default='SYMP', help="Metadata column name for labels (default: 'SYMP')")
+    parser.add_argument('--k', type=int, default=100000, help='Number of top features to select (default: 100000)')
     return parser.parse_args()
 
 
@@ -61,7 +64,7 @@ def load_and_filter_features(feature_file, length_threshold):
 
     # Binarize
     df[df > 0] = 1
-    df = df.T
+    #df = df.T
 
     # Filter by k-mer length
     long_cols = [col for col in df.columns if len(col) >= length_threshold]
@@ -69,7 +72,7 @@ def load_and_filter_features(feature_file, length_threshold):
 
     # Reduce memory usage
     df = df.astype('int8')
-    return df.T
+    return df
 
 def merge_feature_sets(df1, df2):
     # Identify missing rows in each
@@ -83,7 +86,7 @@ def merge_feature_sets(df1, df2):
     # Inner join on index
     return df1.join(df2, how='inner')
 
-def perform_chi2_analysis(merged_df, label_col, output_dir, name):
+def perform_chi2_analysis(merged_df, label_col, k, output_dir, name):
     label_encoder = LabelEncoder()
     merged_df[label_col] = label_encoder.fit_transform(merged_df[label_col])
 
@@ -93,25 +96,36 @@ def perform_chi2_analysis(merged_df, label_col, output_dir, name):
     chi_scores = chi2(X, y)
 
     # Select top 100k features
-    selector = SelectKBest(chi2, k=100_000)
+    selector = SelectKBest(chi2, k=k)
     X_kbest = selector.fit_transform(X, y)
     selected_features = X.columns[selector.get_support()]
 
     print(f'Original feature count: {X.shape[1]}')
-    print(f'Reduced feature count (top 100k): {X_kbest.shape[1]}')
+    print(f'Reduced feature count (top {k}): {X_kbest.shape[1]}')
 
     # Save top 100k features
     os.makedirs(output_dir, exist_ok=True)
-    out_100k = os.path.join(output_dir, f'{name}_100k.tsv')
-    merged_df[selected_features].to_csv(out_100k, sep='\t')
+    out_k = os.path.join(output_dir, f'{name}_top{k}_features.tsv')
+    merged_df[selected_features].to_csv(out_k, sep='\t')
+
+    df_pvalues = pd.DataFrame({
+        'feature': X.columns,
+        'p_value': chi_scores[1]
+    })
+
+    # Save full p-values table
+    os.makedirs(output_dir, exist_ok=True)
+    out_pvals = os.path.join(output_dir, f'{name}_pvalues.tsv')
+    df_pvalues.to_csv(out_pvals, sep='	', index=False)
+
 
     # Save p-value filtered features (p ≤ 0.05)
     p_values = pd.Series(chi_scores[1], index=X.columns)
     good_cols = p_values[p_values <= 0.05].index
-    out_pval = os.path.join(output_dir, f'{name}_pvalue.tsv')
+    out_pval = os.path.join(output_dir, f'{name}_pvalues_features.tsv')
     merged_df[good_cols].to_csv(out_pval, sep='\t')
 
-    print(f'Saved top 100k features to: {out_100k}')
+    print(f'Saved top 100k features to: {out_k}')
     print(f'Saved p ≤ 0.05 features to: {out_pval}')
 
 ########### MAIN #############
@@ -132,12 +146,12 @@ if __name__ == "__main__":
         print("No second feature file provided; using only features1")
         combined = features1.copy()
 
-    combined = combined.T
+    #combined = combined.T
 
     print("Merging with metadata")
     merged_with_meta = pd.merge(combined, meta_df, left_index=True, right_index=True)
 
-    perform_chi2_analysis(merged_with_meta, args.label_col, args.output_dir, args.name)
+    perform_chi2_analysis(merged_with_meta, args.label_col, args.k, args.output_dir, args.name)
 
 
 
