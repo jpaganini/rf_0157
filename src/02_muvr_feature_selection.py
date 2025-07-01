@@ -31,6 +31,7 @@ Inputs (CLI args):
   --n-inner                  Number of inner folds for MUVR (default: 4).
   --metric                   Feature selection metric (default: MISS).
   --features-dropout-rate    Fraction of features to drop each iteration (default: 0.9).
+  --remove_na                If NA or NaN values are found in the output variable, remove it.
 
 Outputs:
   1. Filtered training data TSV:
@@ -58,6 +59,7 @@ Usage Example:
     --n-inner 4 \
     --metric MISS \
     --features-dropout-rate 0.9
+    --remove_na
 """
 
 def get_opts_muvr():
@@ -70,9 +72,6 @@ def get_opts_muvr():
                         help='Path to chisq features TSV')
     parser.add_argument('--model', '-m', type=str, choices=['RFC', 'XGBC'],
                         required=True, help='Model to use: RFC or XGBC')
-#    parser.add_argument('--class_type', '-y', type=str,
-#                        choices=['binary', 'multilabel'], default='binary',
-#                        help='Type of classification (for encoding)')
     parser.add_argument('--group_col', '-g', type=str, default='t5',
                         help='Column name for grouping clusters (default: t5)')
     parser.add_argument('--outcome_col', '-u', type=str, default='SYMP',
@@ -93,12 +92,13 @@ def get_opts_muvr():
                         help='Feature selection metric (default: MISS)')
     parser.add_argument('--features-dropout-rate', type=float, default=0.9,
                         help='Fraction of features to drop each iteration (default: 0.9)')
+    parser.add_argument('--remove_na', action='store_true',
+                        help = 'If set, drop any rows with NaN/NA in outcome or features (and warn)')
     args = parser.parse_args()
     return (
         args.train_data,
         args.chisq_file,
         args.model,
-#        args.class_type,
         args.group_col,
         args.outcome_col,
         args.filtered_train_dir,
@@ -108,15 +108,24 @@ def get_opts_muvr():
         args.n_outer,
         args.n_inner,
         args.metric,
-        args.features_dropout_rate
+        args.features_dropout_rate,
+        args.remove_na
     )
 
-def prepare_data_muvr(train_data, filtered_dir,name, group_col, outcome_col):
+def prepare_data_muvr(train_data, filtered_dir,name, group_col, outcome_col, remove_na=False):
 
     train_data_df = pd.read_csv(train_data, sep='\t', header=0, index_col=0)
 
     train_data_muvr = train_data_df.sort_index().drop_duplicates(subset=[group_col, outcome_col],
-                                                       keep='last')  # remove samples that contain a +
+                                                       keep='last')
+
+# 2) optionally drop missing outcomes early
+    if remove_na:
+        missing = train_data_muvr[outcome_col].isna()
+        n_missing = missing.sum()
+        if n_missing:
+            print(f"WARNING: --remove_na: dropping {n_missing} rows with missing '{outcome_col}'")
+            train_data_muvr = train_data_muvr.loc[~missing]
 
     # Ensure parent directory exists
     os.makedirs(filtered_dir, exist_ok=True)
@@ -126,7 +135,7 @@ def prepare_data_muvr(train_data, filtered_dir,name, group_col, outcome_col):
 
     return train_data_muvr
 
-def feature_reduction(train_data_muvr,chisq_file, model, output_dir,name, outcome_col, n_repetitions, n_outer, n_inner, metric, features_dropout_rate):
+def feature_reduction(train_data_muvr,chisq_file, model, output_dir,name, outcome_col, n_repetitions, n_outer, n_inner, metric, features_dropout_rate, remove_na=False):
 
     target_col = outcome_col
     train_data_muvr = train_data_muvr[[target_col]]
@@ -160,27 +169,33 @@ def feature_reduction(train_data_muvr,chisq_file, model, output_dir,name, outcom
         except StopIteration:
             chunk_chisq = pd.DataFrame()
 
-    #if class_type == "multilabel":
-    #    to_predict = outcome_col
-    #    X_muvr = model_input.drop(outcome_col, axis = 1).to_numpy()
-    #    y_muvr = model_input[outcome_col].values.ravel()
-    #    feature_names = model_input.drop(columns=[outcome_col]).columns
+    if remove_na:
+        # check for NaNs in outcome
+        missing_labels = model_input[outcome_col].isna()
+        count_labels = missing_labels.sum()
+        # check for NaNs anywhere in feature matrix
+        features = model_input.drop(columns=[outcome_col])
+        missing_features = features.isna().any(axis=1)
+        count_feats = missing_features.sum()
 
-#    else:
-#        print("Binary")
-#        to_predict = [outcome_col]
-#        X_muvr = model_input.drop(outcome_col, axis = 1).to_numpy()
-#        y_muvr = model_input[outcome_col].values.ravel()
-#        feature_names = model_input.drop(columns=[outcome_col]).columns
+        total_to_drop = (missing_labels | missing_features).sum()
+        if total_to_drop > 0:
+            print(f"WARNING: --remove_na set: dropping {total_to_drop} rows "
+                  f"({count_labels} missing labels, {count_feats} missing features)")
+
+            # drop them
+            model_input = model_input.loc[~(missing_labels | missing_features)]
+
+    y_series = model_input[target_col]
 
     if model=='XGBC':
         encoder = OneHotEncoder(sparse=False)
     # Reshape y to a 2D array as fit_transform expects a 2D array
-        y_encoded = encoder.fit_transform(train_data_muvr.values)
+        y_encoded = encoder.fit_transform(y_series.values)
         #y_encoded = encoder.fit_transform(np.array(y_muvr).reshape(-1, 1))
         y_variable = y_encoded
     elif model=='RFC':
-        y_variable = train_data_muvr.values.ravel()
+        y_variable = y_series.values.ravel()
 
     else:
         sys.exit("Select a valid model: RFC or XGBC")
@@ -239,7 +254,8 @@ if __name__ == "__main__":
             n_outer,
             n_inner,
             metric,
-            features_dropout_rate
+            features_dropout_rate,
+            remove_na
         ) = get_opts_muvr()
         print("Filtering data")
         train_filtered = prepare_data_muvr(
@@ -247,7 +263,8 @@ if __name__ == "__main__":
             filtered_train_dir,
             name,
             group_col,
-            outcome_col
+            outcome_col,
+            remove_na=remove_na
         )
 
         print("Running MUVR feature reduction")
@@ -262,6 +279,8 @@ if __name__ == "__main__":
             n_outer,
             n_inner,
             metric,
-            features_dropout_rate)
+            features_dropout_rate,
+            remove_na=remove_na
+        )
 
 
