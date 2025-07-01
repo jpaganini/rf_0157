@@ -1,130 +1,241 @@
-# IMPORT PACKAGE
-
-# Stats
-import numpy as np
+import argparse
+import logging
 import random
-from scipy import interp
-import sys
+from pathlib import Path
+from typing import Tuple, List
 
-# pandas
+import numpy as np
 import pandas as pd
-
-
-
-# modelling
 from sklearn.model_selection import StratifiedGroupKFold
 
+"""
+00_split_dataset.py
 
-def usage():
+Splits a metadata TSV into train/test sets stratified by outcome and grouped by clusters within each lineage.
 
-    sys.exit()
+Inputs (CLI args):
+  --meta-file / -m      Path to input metadata TSV. Must contain columns:
+                          * sample ID (specified via --id-col)
+                          * lineage grouping (via --lineage-col)
+                          * stratification outcome (via --outcome-col)
+                          * clustering/group variable (via --group-col)
+  --out-dir / -o        Output directory for result TSVs.
+  --name / -n           Base filename; '_train.tsv' and '_test.tsv' appended.
+  --lineage-col / -l    Column name for lineage grouping (default: LINEAGE).
+  --group-col / -g      Column name for grouping clusters (default: t5).
+  --id-col / -i         Column name for sample identifier (default: SRA).
+  --outcome-col / -c    Column name for stratification outcome/label (default: SYMP).
+  --n-splits / -k       Number of folds for StratifiedGroupKFold (default: 5).
+  --seed / -s           Random seed for fold selection (default: 42).
+  --print-metrics       If set, prints value counts for lineage, outcome, and group in train/test sets.
 
-def get_opts():
-    if len(sys.argv) != 2:
-        usage()
-    else:
-        return sys.argv[1]
-
-
-
-def split_dataset(meta_file):
-        RSEED=50
-
-        #load the metadata
-        metadata = pd.read_csv(meta_file, sep='\t', header=0)
-        metadata = metadata.set_index('SRA')
-        #metadata=metadata.iloc[:,:16] - #REMOVED WHEN MUVR
-
-        #Create new dataframes for each sublineage
-        lineage_categories = metadata['LINEAGE'].unique()
-            #Create an empty dictoniary to store the DataFrames
-        lineage_dfs = {}
-
-            # Iterate over each 'LINEAGE' category and create a separate DataFrame for each
-        for lineage in lineage_categories:
-            mask = metadata['LINEAGE'] == lineage
-            lineage_dfs[lineage] = metadata[mask]
-
-        #Create an empty dictoniary to store the train-test splits
-        train_test_splits={}
-
-        #Iterate over the LINEAGE dictonary
-        for lineage in lineage_categories:
-            #Select the correct lineage dataframe
-            current_lineage_df = lineage_dfs[lineage]
-            #stablish the label column
-            labels = np.array(current_lineage_df['SYMP'])
-            #stablish the t5 clusters
-            t5=np.array(current_lineage_df['t5'])
-
-            #Create the iterator for the Splits - here we use 5 splits to get an approximate 80/20 split
-            sfgs=StratifiedGroupKFold(n_splits=5)
-            cv_iterator = list(sfgs.split(current_lineage_df, labels, groups=t5))
-
-            #randomly chose one of the splits
-            random.seed(42)
-            random_split=random.choice(cv_iterator)
-
-            #Get two different dataframes with the test and train data.
-            test_data = current_lineage_df.iloc[random_split[1]]
-            train_data = current_lineage_df.iloc[random_split[0]]
-            #Add everything to a dictonary
-            train_test_splits[lineage] = train_data,test_data
+Outputs:
+  <out-dir>/<name>_train.tsv  Train set (TSV).
+  <out-dir>/<name>_test.tsv   Test set (TSV).
+  
+Usage Example:
+python 00_split_dataset.py \
+--meta-file data/metadata.tsv \
+--out-dir results/ \
+--name study1 \
+--id-col SampleID \
+--lineage-col Clade \
+--group-col Batch \
+--outcome-col Status \
+--n-splits 5 \
+--seed 123 \
+--print-metrics
+"""
 
 
-#Combine all train and test data into a single dataset
-        train_dfs=train_dfs = [split[0] for split in train_test_splits.values()]
-        final_train = pd.concat(train_dfs, ignore_index=False)
 
-        test_dfs = train_dfs = [split[1] for split in train_test_splits.values()]
-        final_test = pd.concat(test_dfs, ignore_index=False)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Split metadata into train/test sets by lineage with stratified group k-fold."
+    )
+    parser.add_argument(
+        "--meta-file", "-m",
+        type=Path,
+        required=True,
+        help="Path to metadata TSV file."
+    )
+    parser.add_argument(
+        "--out-dir", "-o",
+        type=Path,
+        required=True,
+        help="Directory to write train/test output files."
+    )
+    parser.add_argument(
+        "--name", "-n",
+        type=str,
+        required=True,
+        help="Base name for output files; '_train.tsv' and '_test.tsv' will be appended."
+    )
+    parser.add_argument(
+        "--lineage-col", "-l",
+        type=str,
+        default="LINEAGE",
+        help="Column name to use for lineage grouping (default: LINEAGE)."
+    )
+    parser.add_argument(
+        "--group-col", "-g",
+        type=str,
+        default="t5",
+        help="Column name to use as grouping variable for StratifiedGroupKFold (default: t5)."
+    )
+    parser.add_argument(
+        "--id-col", "-i",
+        type=str,
+        default="SRA",
+        help="Column name to use as the sample ID/index (default: SRA)."
+    )
+    parser.add_argument(
+        "--outcome-col", "-c",
+        type=str,
+        default="SYMP",
+        help="Column name to use as the outcome/label (default: SYMP)."
+    )
+    parser.add_argument(
+        "--n-splits", "-k",
+        type=int,
+        default=5,
+        help="Number of splits for StratifiedGroupKFold (default: 5)."
+    )
+    parser.add_argument(
+        "--seed", "-s",
+        type=int,
+        default=42,
+        help="Random seed for selecting one fold (default: 42)."
+    )
+    parser.add_argument(
+        "--print-metrics",
+        action="store_true",
+        help="Print value counts for lineage, outcome, and group in train/test sets."
+    )
+    return parser.parse_args()
 
-        #THIS WILL BE REMOVED===============
-        filtered_train = final_train[final_train['SYMP'] == 'HUS']
 
-        filtered_test = final_test[final_test['SYMP'] == 'HUS']
+def split_by_lineage(
+    metadata: pd.DataFrame,
+    lineage_col: str,
+    group_col: str,
+    outcome_col: str,
+    n_splits: int,
+    seed: int
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Perform stratified-group k-fold splitting within each lineage.
 
-        specific_columns = ['LINEAGE', 'SYMP', 't5']
+    Args:
+        metadata: DataFrame indexed by sample ID, must include lineage_col, group_col, outcome_col.
+        lineage_col: column name for lineages.
+        group_col: column name for grouping clusters.
+        outcome_col: column name for labels.
+        n_splits: number of folds for StratifiedGroupKFold.
+        seed: random seed to pick one of the folds.
 
-        for column in specific_columns:
-            if column in final_test.columns:
-                value_counts = final_test[column].value_counts()
-                print(f"Metric Test Set: {column}\n{value_counts}\n")
-            else:
-                print(f"Column {column} not found in the DataFrame.\n")
+    Returns:
+        final_train, final_test: concatenated DataFrames.
+    """
+    train_parts: List[pd.DataFrame] = []
+    test_parts: List[pd.DataFrame] = []
 
-        for column in specific_columns:
-            if column in final_train.columns:
-                value_counts = final_train[column].value_counts()
-                print(f"Metric Train Set: {column}\n{value_counts}\n")
-            else:
-                print(f"Column {column} not found in the DataFrame.\n")
+    #rng = random.Random(seed)
+    skf = StratifiedGroupKFold(n_splits=n_splits)
 
-        for column in specific_columns:
-            if column in filtered_train.columns:
-                value_counts = filtered_train[column].value_counts()
-                print(f"Metric Filtered Train Set: {column}\n{value_counts}\n")
-            else:
-                print(f"Column {column} not found in the DataFrame.\n")
+    for lineage, group_df in metadata.groupby(lineage_col):
+        if group_df.shape[0] < n_splits:
+            logging.warning(
+                f"Skipping lineage '{lineage}' with {group_df.shape[0]} samples (< {n_splits} splits)."
+            )
+            continue
 
-        for column in specific_columns:
-            if column in filtered_test.columns:
-                value_counts = filtered_test[column].value_counts()
-                print(f"Metric Filtered Test Set: {column}\n{value_counts}\n")
-            else:
-                print(f"Column {column} not found in the DataFrame.\n")
+        labels = group_df[outcome_col].values
+        clusters = group_df[group_col].values
 
-        #write the final output
-        final_train.to_csv(r'TMP_2023_train_set_jp.tsv', sep='\t')
-        final_test.to_csv(r'TMP_2023_test_set_jp.tsv', sep='\t')
+        lineage_rng = random.Random(seed)
+        train_idx, test_idx = lineage_rng.choice(splits)
+        splits = list(skf.split(group_df, labels, groups=clusters))
+        train_idx, test_idx = rng.choice(splits)
 
-        return final_train, final_test
+        train_parts.append(group_df.iloc[train_idx])
+        test_parts.append(group_df.iloc[test_idx])
+
+    final_train = pd.concat(train_parts, ignore_index=False)
+    final_test = pd.concat(test_parts, ignore_index=False)
+    return final_train, final_test
 
 
-################ MAIN ##############
+def print_value_counts(
+    df: pd.DataFrame,
+    columns: List[str],
+    label: str
+) -> None:
+    """
+    Print value counts for specified columns in a DataFrame.
+    """
+    print(f"--- {label} Metrics ---")
+    for col in columns:
+        if col in df.columns:
+            counts = df[col].value_counts(dropna=False)
+            print(f"{col}:\n{counts}\n")
+        else:
+            print(f"Column '{col}' not found in DataFrame.\n")
 
-#1. Load metadata
-meta_file = get_opts()
 
-#2. create a train-test split - considering population structre and blocking hihgly similar isoaltes to avoid data-leakage
-train_data,validation_data=split_dataset(meta_file)
+def main():
+    args = parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+    # ensure output directory exists
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    # load metadata
+    metadata = pd.read_csv(
+        args.meta_file,
+        sep="\t",
+        header=0,
+        index_col=None
+    )
+    # set sample ID index
+    if args.id_col not in metadata.columns:
+        logging.error(f"ID column not found: {args.id_col}")
+        return
+    metadata = metadata.set_index(args.id_col)
+
+    # check lineage, group, outcome columns
+    for col in (args.lineage_col, args.group_col, args.outcome_col):
+        if col not in metadata.columns:
+            logging.error(f"Required column not found: {col}")
+            return
+
+    # split dataset
+    train_df, test_df = split_by_lineage(
+        metadata,
+        lineage_col=args.lineage_col,
+        group_col=args.group_col,
+        outcome_col=args.outcome_col,
+        n_splits=args.n_splits,
+        seed=args.seed
+    )
+
+    # print metrics if requested
+    if args.print_metrics:
+        cols = [args.lineage_col, args.outcome_col, args.group_col]
+        print_value_counts(train_df, cols, label="Train Set")
+        print_value_counts(test_df, cols, label="Test Set")
+
+    # write outputs
+    train_path = args.out_dir / f"{args.name}_train.tsv"
+    test_path = args.out_dir / f"{args.name}_test.tsv"
+    train_df.to_csv(train_path, sep="\t")
+    test_df.to_csv(test_path, sep="\t")
+
+    logging.info(
+        f"Train/test split complete: {len(train_df)} train -> {train_path}; "
+        f"{len(test_df)} test -> {test_path}"
+    )
+
+
+if __name__ == "__main__":
+    main()
