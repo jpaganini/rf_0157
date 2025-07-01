@@ -6,31 +6,116 @@ import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 from py_muvr.feature_selector import FeatureSelector
 
+"""
+02_muvr_feature_selection.py
 
-TARGET_COLUMNS = {
-    'binary': 'SYMP H/L',
-    'multilabel': 'SYMP'
-}
+Runs MUVR-based recursive feature selection on a training dataset combined with a chisq feature matrix.
+
+Inputs (CLI args):
+  --train_data / -t          Path to input training data TSV. Must include:
+                                * sample ID as first column (used as index)
+                                * grouping column (specified via --group-col)
+                                * outcome column (specified via --outcome-col)
+  --chisq_file / -c          Path to full chisq feature matrix TSV. Must include:
+                                * sample ID as first column (Index)
+                                * all candidate feature columns (binary/integer values)
+  --model / -m               Choice of classifier: 'RFC' (RandomForest) or 'XGBC' (XGBoost).
+  --class_type / -y          Classification type (for encoding): 'binary' or 'multilabel'.
+  --group-col / -g           Column name for grouping clusters (default: t5).
+  --outcome-col / -u         Column name for outcome/label (default: SYMP).
+  --filtered_train_dir / -f  Directory to write deduplicated training data TSV.
+  --output / -o              Directory under which MUVR results will be saved.
+  --name / -n                Base filename prefix for all outputs.
+  --n-repetitions            Number of MUVR repetitions (default: 10).
+  --n-outer                  Number of outer folds for MUVR (default: 5).
+  --n-inner                  Number of inner folds for MUVR (default: 4).
+  --metric                   Feature selection metric (default: MISS).
+  --features-dropout-rate    Fraction of features to drop each iteration (default: 0.9).
+
+Outputs:
+  1. Filtered training data TSV:
+       <filtered_train_dir>/<name>.tsv
+     (samples deduplicated on ['group-col','outcome-col'], header preserved)
+
+  2. MUVR-selected feature TSVs (three levels):
+       <output>/<class_type>/<name>_muvr_<model>_min.tsv  # minimal feature set
+       <output>/<class_type>/<name>_muvr_<model>_mid.tsv  # mid-level feature set
+       <output>/<class_type>/<name>_muvr_<model>_max.tsv  # maximal feature set
+
+Usage Example:
+  python 02_muvr_feature_selection.py \
+    --train_data data/train_set.tsv \
+    --chisq_file data/full_chisq_matrix.tsv \
+    --model RFC \
+    --class_type binary \
+    --group_col t5 \
+    --outcome_col SYMP \
+    --filtered_train_dir results/filtered_train \
+    --output rsults/muvr_features \
+    --name study1 \
+    --n-repetitions 10 \
+    --n-outer 5 \
+    --n-inner 4 \
+    --metric MISS \
+    --features-dropout-rate 0.9
+"""
 
 def get_opts_muvr():
-    parser = argparse.ArgumentParser(description="Run MUVR-based feature selection on input data.")
-    parser.add_argument('--train_data', type=str, required=True, help='Path to training data TSV')
-    parser.add_argument('--chisq_file', type=str, required=True, help='Path to chisq features TSV')
-    parser.add_argument('--model', type=str, choices=['RFC', 'XGBC'], required=True, help='Model to use: RFC or XGBC')
-    parser.add_argument('--class_type', type=str, choices=['binary', 'multilabel'], default='binary',
-                        help='Type of classification')
-    parser.add_argument('--output', type=str, required=True, help='Output directory for storing results')
-    parser.add_argument('--filtered_train_dir', type=str, required=True, help='Directory to save the filtered training data (after deduplication)')
-    parser.add_argument('--name', type=str, required=True, help='Base filename for outputs')
-
+    parser = argparse.ArgumentParser(
+        description="Run MUVR-based feature selection on input data."
+    )
+    parser.add_argument('--train_data', '-t', type=str, required=True,
+                        help='Path to training data TSV')
+    parser.add_argument('--chisq_file', '-c', type=str, required=True,
+                        help='Path to chisq features TSV')
+    parser.add_argument('--model', '-m', type=str, choices=['RFC', 'XGBC'],
+                        required=True, help='Model to use: RFC or XGBC')
+#    parser.add_argument('--class_type', '-y', type=str,
+#                        choices=['binary', 'multilabel'], default='binary',
+#                        help='Type of classification (for encoding)')
+    parser.add_argument('--group_col', '-g', type=str, default='t5',
+                        help='Column name for grouping clusters (default: t5)')
+    parser.add_argument('--outcome_col', '-u', type=str, default='SYMP',
+                        help='Column name for outcome/label (default: SYMP)')
+    parser.add_argument('--filtered_train_dir', '-f', type=str, required=True,
+                        help='Directory to save the filtered training data (after deduplication)')
+    parser.add_argument('--output', '-o', type=str, required=True,
+                        help='Output directory for storing MUVR results')
+    parser.add_argument('--name', '-n', type=str, required=True,
+                        help='Base filename for outputs')
+    parser.add_argument('--n-repetitions', type=int, default=10,
+                        help='Number of MUVR repetitions (default: 10)')
+    parser.add_argument('--n-outer', type=int, default=5,
+                        help='Number of outer folds for MUVR (default: 5)')
+    parser.add_argument('--n-inner', type=int, default=4,
+                        help='Number of inner folds for MUVR (default: 4)')
+    parser.add_argument('--metric', type=str, default='MISS',
+                        help='Feature selection metric (default: MISS)')
+    parser.add_argument('--features-dropout-rate', type=float, default=0.9,
+                        help='Fraction of features to drop each iteration (default: 0.9)')
     args = parser.parse_args()
-    return args.train_data, args.chisq_file, args.model, args.class_type, args.output, args.filtered_train_dir, args.name
+    return (
+        args.train_data,
+        args.chisq_file,
+        args.model,
+#        args.class_type,
+        args.group_col,
+        args.outcome_col,
+        args.filtered_train_dir,
+        args.output,
+        args.name,
+        args.n_repetitions,
+        args.n_outer,
+        args.n_inner,
+        args.metric,
+        args.features_dropout_rate
+    )
 
-def prepare_data_muvr(train_data, filtered_dir):
+def prepare_data_muvr(train_data, filtered_dir,name, group_col, outcome_col):
 
     train_data_df = pd.read_csv(train_data, sep='\t', header=0, index_col=0)
 
-    train_data_muvr = train_data_df.sort_index().drop_duplicates(subset=['t5', 'SYMP'],
+    train_data_muvr = train_data_df.sort_index().drop_duplicates(subset=[group_col, outcome_col],
                                                        keep='last')  # remove samples that contain a +
 
     # Ensure parent directory exists
@@ -41,12 +126,10 @@ def prepare_data_muvr(train_data, filtered_dir):
 
     return train_data_muvr
 
-def feature_reduction(train_data_muvr,chisq_file, model,class_type, output_dir,name):
+def feature_reduction(train_data_muvr,chisq_file, model, output_dir,name, outcome_col, n_repetitions, n_outer, n_inner, metric, features_dropout_rate):
 
-    target_col = TARGET_COLUMNS[class_type]
+    target_col = outcome_col
     train_data_muvr = train_data_muvr[[target_col]]
-
-    train_data_muvr = train_data_muvr.drop(columns=columns_to_drop)
 
     # Create an iterator for reading chisq_features line by line
     reader_chisq = pd.read_csv(chisq_file, sep='\t', header=0, iterator=True, chunksize=1)
@@ -77,39 +160,41 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type, output_dir,n
         except StopIteration:
             chunk_chisq = pd.DataFrame()
 
-    if class_type == "multilabel":
-        to_predict = ['SYMP']
-        X_muvr = model_input.drop('SYMP', axis = 1).to_numpy()
-        y_muvr = model_input['SYMP'].values.ravel()
-        feature_names = model_input.drop(columns=["SYMP"]).columns
+    #if class_type == "multilabel":
+    #    to_predict = outcome_col
+    #    X_muvr = model_input.drop(outcome_col, axis = 1).to_numpy()
+    #    y_muvr = model_input[outcome_col].values.ravel()
+    #    feature_names = model_input.drop(columns=[outcome_col]).columns
 
-    else:
-        print("Binary")
-        to_predict = ['SYMP H/L']
-        X_muvr = model_input.drop('SYMP H/L', axis = 1).to_numpy()
-        y_muvr = model_input['SYMP H/L'].values.ravel()
-        feature_names = model_input.drop(columns=["SYMP H/L"]).columns
+#    else:
+#        print("Binary")
+#        to_predict = [outcome_col]
+#        X_muvr = model_input.drop(outcome_col, axis = 1).to_numpy()
+#        y_muvr = model_input[outcome_col].values.ravel()
+#        feature_names = model_input.drop(columns=[outcome_col]).columns
 
     if model=='XGBC':
         encoder = OneHotEncoder(sparse=False)
-
     # Reshape y to a 2D array as fit_transform expects a 2D array
-        y_encoded = encoder.fit_transform(np.array(y_muvr).reshape(-1, 1))
+        y_encoded = encoder.fit_transform(train_data_muvr.values)
+        #y_encoded = encoder.fit_transform(np.array(y_muvr).reshape(-1, 1))
         y_variable = y_encoded
-
     elif model=='RFC':
-        y_variable = y_muvr
+        y_variable = train_data_muvr.values.ravel()
 
     else:
         sys.exit("Select a valid model: RFC or XGBC")
 
+    X_muvr = model_input.drop(columns=[target_col]).to_numpy()
+    feature_names = model_input.drop(columns=[target_col]).columns
+
     feature_selector = FeatureSelector(
-        n_repetitions=10,
-        n_outer=5,
-        n_inner=4,
+        n_repetitions=n_repetitions,
+        n_outer=n_outer,
+        n_inner=n_inner,
         estimator=model,
-        metric="MISS",
-        features_dropout_rate=0.9
+        metric=metric,
+        features_dropout_rate=features_dropout_rate
     )
 
     print("Running MUVR")
@@ -117,16 +202,16 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type, output_dir,n
     selected_features = feature_selector.get_selected_features(feature_names=feature_names)
 
     # Obtain a dataframe containing MUVR selected features
-    df_muvr_min = model_input[to_predict+list(selected_features.min)]
-    df_muvr_mid = model_input[to_predict+list(selected_features.mid)]
-    df_muvr_max = model_input[to_predict+list(selected_features.max)]
+    df_muvr_min = model_input[[outcome_col]+list(selected_features.min)]
+    df_muvr_mid = model_input[[outcome_col]+list(selected_features.mid)]
+    df_muvr_max = model_input[[outcome_col]+list(selected_features.max)]
 
     #Write features to a new file.
-    output_path = os.path.join(output_dir, class_type)
-    os.makedirs(output_path, exist_ok=True)
-    min_features_file_name = os.path.join(output_path, f'{name}_muvr_{model}_min.tsv')
-    mid_features_file_name = os.path.join(output_path, f'{name}_muvr_{model}_mid.tsv')
-    max_features_file_name = os.path.join(output_path, f'{name}_muvr_{model}_max.tsv')
+    #output_path = os.path.join(output_dir, class_type)
+    os.makedirs(output_dir, exist_ok=True)
+    min_features_file_name = os.path.join(output_dir, f'{name}_muvr_{model}_min.tsv')
+    mid_features_file_name = os.path.join(output_dir, f'{name}_muvr_{model}_mid.tsv')
+    max_features_file_name = os.path.join(output_dir, f'{name}_muvr_{model}_max.tsv')
 
     df_muvr_min.to_csv(min_features_file_name, sep='\t')
     df_muvr_mid.to_csv(mid_features_file_name, sep='\t')
@@ -140,14 +225,43 @@ def feature_reduction(train_data_muvr,chisq_file, model,class_type, output_dir,n
 #
 #######################################################
 if __name__ == "__main__":
-    train_data, chisq_file, model, class_type, output_dir,filtered_train_dir, name = get_opts_muvr()
+    if __name__ == "__main__":
+        (
+            train_data,
+            chisq_file,
+            model,
+            group_col,
+            outcome_col,
+            filtered_train_dir,
+            output_dir,
+            name,
+            n_repetitions,
+            n_outer,
+            n_inner,
+            metric,
+            features_dropout_rate
+        ) = get_opts_muvr()
+        print("Filtering data")
+        train_filtered = prepare_data_muvr(
+            train_data,
+            filtered_train_dir,
+            name,
+            group_col,
+            outcome_col
+        )
 
-    print("Filtering data")
-    train_data_muvr = prepare_data_muvr(train_data, filtered_train_dir, name)
-
-    print("MUVR feature reduction")
-    min_muvr_filtered_file, mid_muvr_filtered_file, max_muvr_filtered_file = feature_reduction(
-        train_data_muvr, chisq_file, model, class_type, output_dir, name)
-
+        print("Running MUVR feature reduction")
+        feature_reduction(
+            train_filtered,
+            chisq_file,
+            model,
+            output_dir,
+            name,
+            outcome_col,
+            n_repetitions,
+            n_outer,
+            n_inner,
+            metric,
+            features_dropout_rate)
 
 
