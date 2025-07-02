@@ -49,6 +49,7 @@ import sys                           # graceful exits
 from collections import defaultdict  # group counting helper
 from pathlib import Path             # path handling
 from typing import List              # type alias
+from typing import Optional, List
 
 # ──────────────────────────────── 3rd‑party ──────────────────────────────────
 import joblib                        # load joblib artefact
@@ -95,7 +96,7 @@ def min_groups_per_class(y: np.ndarray, groups: np.ndarray) -> int:
     return min(len(g) for g in c2g.values())
 
 
-def get_cv_iterator(y: np.ndarray, groups: np.ndarray, n_splits: int):
+def get_cv_iterator(y: np.ndarray, groups: np.ndarray, n_splits):
     """Return list of train/test indices for grouped CV; error if impossible."""
     min_g = min_groups_per_class(y, groups)
     if n_splits > min_g:
@@ -103,6 +104,11 @@ def get_cv_iterator(y: np.ndarray, groups: np.ndarray, n_splits: int):
             f"n_splits={n_splits} > available groups per rarest class ({min_g})")
     sgkf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=RSEED)
     return list(sgkf.split(np.zeros_like(y), y, groups))
+
+def predict_with_pipeline(
+    pipeline, X: pd.DataFrame
+) -> Tuple[np.ndarray, np.ndarray]:
+    return pipeline.predict(X), pipeline.predict_proba(X)
 
 # ╭──────────────────────────────────────────────────────────────────────────╮
 # │                          core evaluation loop                           │
@@ -117,7 +123,7 @@ def run_evaluation(
     no_cv: bool,
     output_dir: Path,
     name: str,
-):
+) -> None:
     """Grouped‑CV evaluation: predictions, metrics, feature importances, SHAP."""
 
     # 0️⃣  Output directory
@@ -278,7 +284,7 @@ def parse_args():
     p.add_argument("--label", required=True, help="name of the label column")
     p.add_argument("--group_column", required=True, help="name of the group column")
     group = p.add_mutually_exclusive_group(required=True)
-    group.add_argument("--n_splits", type=int, default=5, help="CV folds (default 5)")
+    group.add_argument("--n_splits", type=int, help="CV folds (default 5)")
     group.add_argument('--no_cv', action='store_true', help='Skip CV and predict full dataset once')
     p.add_argument("--output_dir", type=Path, required=True, help="directory for outputs")
     p.add_argument("--name", required=True, help="prefix for output files")
