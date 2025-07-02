@@ -19,7 +19,8 @@ Inputs (CLI args):
                    Must include:
                      * sample ID as first column (will be used as index)
                      * all feature columns, from which selected ones will be extracted.
-  --metadata      Path to metadata TSV containing sample ID (index) and a grouping column.
+  --train_metadata   Path to metadata TSV for training split (index, label, group columns).
+  --test_metadata    Path to metadata TSV for testing split (same columns as train_metadata).
   --label         Name of the label column in the MUVR file to include in output.
   --group_column  Name of the grouping column in the metadata file.
   --output_dir    Directory where the extracted feature matrix will be written.
@@ -27,16 +28,17 @@ Inputs (CLI args):
   --name          Base name (without extension) for the output file; “.tsv” will be appended.
 
 Outputs:
-  A TSV file at <output_dir>/<name>.tsv that contains, for each sample:
+  Two TSV files at <output_dir>/<name>_train.tsv and <output_dir>/<name>_test.tsv, each containing, for each sample:
     * extracted features (columns matching those in the MUVR file minus the label)
-    * a 'label' column with the outcome values
-    * a 'group' column with group IDs from metadata
+    * the original label column with its original name
+    * the original group column with its original name
 
 Usage Example:
   python 03_extract_features.py \
     --muvr_file results/muvr_RFC_min.tsv \
     --chisq_file data/full_chisq_matrix.tsv \
-    --metadata data/sample_metadata.tsv \
+    --train_metadata data/train_metadata.tsv \
+    --test_metadata data/test_metadata.tsv \
     --label SYMP \
     --group_column cohort \
     --output_dir results \
@@ -51,8 +53,10 @@ def parse_arguments():
                         help='Path to MUVR-selected feature file (e.g. *_muvr_RFC_min.tsv)')
     parser.add_argument('--chisq_file', type=str, required=True,
                         help='Path to full feature matrix (e.g. full_chisq_matrix.tsv)')
-    parser.add_argument('--metadata', type=str, required=True,
-                        help='Path to metadata TSV containing index and group column')
+    parser.add_argument('--train_metadata', type=str, required=True,
+                        help='Path to metadata TSV for training split')
+    parser.add_argument('--test_metadata', type=str, required=True,
+                        help='Path to metadata TSV for testing split')
     parser.add_argument('--label', type=str, required=True,
                         help='Name of the label column to include in output')
     parser.add_argument('--group_column', type=str, required=True,
@@ -79,60 +83,74 @@ def load_selected(muvr_path, label_col):
     features = [c for c in df.columns if c != label_col]
     return features
 
-def load_metadata(meta_path, label_col, group_col):
+def load_split_metadata(meta_path, label_col, group_col):
     """
-    Load metadata, ensuring group_col exists.
+    Load metadata split file, ensuring label and group columns exist.
     Returns:
-        pd.Series of group IDs indexed by sample ID
+        labels: pd.Series of label values indexed by sample ID
+        groups: pd.Series of group IDs indexed by sample ID
     """
     meta = pd.read_csv(meta_path, sep='\t', index_col=0)
     missing = [col for col in (label_col, group_col) if col not in meta.columns]
     if missing:
-        raise SystemExit(f"Error: columns {missing} not found in metadata file")
-    labels = meta[label_col]
-    groups = meta[group_col]
-    return labels, groups
+        raise SystemExit(f"Error: columns {missing} not found in metadata file {meta_path}")
+    return meta[label_col], meta[group_col]
 
 
 def extract_features(chisq_file, selected_features):
     """Extract selected features from full chisq matrix."""
     #usecols = ['Unnamed: 0'] + selected_features  # 'Unnamed: 0' ensures the index column is loaded
-    #df = pd.read_csv(chisq_file, sep='\t', usecols=usecols, index_col=0)
     df_full = pd.read_csv(chisq_file, sep='\t', index_col=0)
     df = df_full[selected_features]
     return df
 
+
+def process_split(meta_path, chisq_file, features, label_col, group_col, output_dir, suffix, base_name):
+    """
+    Load metadata, extract features, merge, and write one split with suffix.
+    """
+    labels, groups = load_split_metadata(meta_path, label_col, group_col)
+    feats = extract_features(chisq_file, features)
+    df = pd.concat([feats, labels, groups], axis=1, join='inner')
+
+    outdir = Path(output_dir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    name = f"{base_name}_{suffix}.tsv"
+    final_path = outdir / name
+    print(f"Saving {suffix} split to {final_path}")
+    df.to_csv(final_path, sep='\t')
+
 def main():
     args = parse_arguments()
 
-    # 1. Load selected feature list and labels
-    print(f"Loading MUVR-selected features from {args.muvr_file}")
-    features = load_selected(args.muvr_file,args.label)
+    print(f"Loading selected features from {args.muvr_file}")
+    features = load_selected(args.muvr_file, args.label)
 
-    # 2. Load metadata groups
-    print(f"Loading metadata (group IDs) from {args.metadata}")
-    labels, groups = load_metadata(args.metadata, args.label, args.group_column)
+    # Process train and test splits
+    print("Processing train split...")
+    process_split(
+        args.train_metadata,
+        args.chisq_file,
+        features,
+        args.label,
+        args.group_column,
+        args.output_dir,
+        suffix="train",
+        base_name=args.name
+    )
 
-    # 3. Extract features from full matrix
-    print(f"Extracting {len(features)} features …")
-    chisq_features = extract_features(args.chisq_file, features)
+    print("Processing test split...")
+    process_split(
+        args.test_metadata,
+        args.chisq_file,
+        features,
+        args.label,
+        args.group_column,
+        args.output_dir,
+        suffix="test",
+        base_name=args.name
+    )
 
-    # 4. Merge into one table
-    print("Merging features, labels, and group IDs")
-    df = pd.concat([chisq_features, labels, groups], axis=1, join='inner')
-
-    # 5. Write output
-    outdir = Path(args.output_dir)
-    outdir.mkdir(parents=True, exist_ok=True)
-
-    # ensure .tsv extension
-    fname = args.name
-    if not fname.endswith('.tsv'):
-        fname += '.tsv'
-    final_path = outdir / fname
-
-    print(f"Saving assembled dataset to {final_path}")
-    df.to_csv(final_path, sep='\t')
     print("Done.")
 
 
