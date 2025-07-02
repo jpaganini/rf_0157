@@ -1,19 +1,43 @@
 #!/usr/bin/env python
-"""evaluate_model.py –
-================================================================
-Files produced (per run)
------------------------
-```
-<OUTPUT_DIR>/
- ├── predictions.tsv
- ├── probabilities.tsv
- ├── classification_report.tsv
- ├── confusion_matrix.tsv
- ├── confusion_matrix.png
- ├── feature_importances.tsv   # (only for tree models)
- ├── shap_values.npy           # raw SHAP arrays
- └── shap_summary.png
-```
+"""
+Script: 05_evaluate_model.py
+
+Inputs:
+  --model          Path to trained .joblib model artifact.
+  --features       Path to TSV file containing features, label, and group columns.
+  --label          Name of the label column in the TSV.
+  --group_column   Name of the group column in the TSV.
+  --n_splits       Number of cross-validation folds (mutually exclusive with --no_cv). Default: 5.
+  --no_cv          If set, skip cross-validation and predict on the full dataset once.
+  --output_dir     Directory in which to write outputs (will be created if it does not exist).
+  --name           Prefix to add to all output filenames.
+  --log_level      Logging verbosity level (choices: DEBUG, INFO, WARNING, ERROR). Default: INFO.
+
+Outputs:
+  <name>_predictions.tsv            Tab-separated file with 'truth' and 'prediction' columns for each sample.
+  <name>_probabilities.tsv          Tab-separated file with class probability columns indexed by sample ID.
+  <name>_classification_report.tsv  Tab-separated file summarizing precision, recall, f1-score for each class.
+  <name>_confusion_matrix.tsv       Tab-separated file containing the confusion matrix (actual vs. predicted).
+  <name>_feature_importances.tsv    Tab-separated file of feature importance scores averaged across folds (if available).
+  <name>_shap_values.npy            NumPy array file of aggregated SHAP values across folds (if computed).
+  <name>_confusion_matrix.png       Heatmap of the confusion matrix saved as PNG.
+  <name>_shap_summary.png           SHAP summary beeswarm plot saved as PNG (if SHAP values computed).
+
+Instructions of Use:
+  This script performs grouped cross-validation or single-run evaluation of a scikit-learn/imblearn
+  pipeline model. It loads the model and features table, executes training and/or prediction,
+  computes metrics and explanations, and writes results to the specified output directory.
+
+Usage Example:
+  python 05_evaluate_model.py \
+    --model path/to/model.joblib \
+    --features path/to/features.tsv \
+    --label target_column \
+    --group_column group_column \
+    --n_splits 5 \
+    --output_dir results/ \
+    --name experiment1 \
+    --log_level INFO
 """
 
 # ────────────────────────────── standard library ─────────────────────────────
@@ -92,6 +116,7 @@ def run_evaluation(
     n_splits: Optional[int],
     no_cv: bool,
     output_dir: Path,
+    name: str,
 ):
     """Grouped‑CV evaluation: predictions, metrics, feature importances, SHAP."""
 
@@ -203,12 +228,12 @@ def run_evaluation(
 
     # 5️⃣  Write artefacts ------------------------------------------------------
     files = {
-        "predictions": output_dir / "predictions.tsv",
-        "probabilities": output_dir / "probabilities.tsv",
-        "class_report": output_dir / "classification_report.tsv",
-        "conf_matrix": output_dir / "confusion_matrix.tsv",
-        "feat_importances": output_dir / "feature_importances.tsv",
-        "shap_values": output_dir / "shap_values.npy",
+        "predictions": output_dir / f"{name}_predictions.tsv",
+        "probabilities": output_dir / f"{name}_probabilities.tsv",
+        "class_report": output_dir / f"{name}_classification_report.tsv",
+        "conf_matrix": output_dir / f"{name}_confusion_matrix.tsv",
+        "feat_importances": output_dir / f"{name}_feature_importances.tsv",
+        "shap_values": output_dir / f"{name}_shap_values.npy",
     }
 
     proba_df.to_csv(files["probabilities"], sep="\t")
@@ -226,7 +251,7 @@ def run_evaluation(
         cmap=plt.cm.Blues,
         values_format=".2g",
     )
-    plt.savefig(output_dir / "confusion_matrix.png", dpi=300)
+    plt.savefig(output_dir / f"{name}_confusion_matrix.png", dpi=300)
     plt.close()
 
     # SHAP summary beeswarm
@@ -237,7 +262,7 @@ def run_evaluation(
             feature_names=X.columns,
             show=False,
         )
-        plt.savefig(output_dir / "shap_summary.png", dpi=300)
+        plt.savefig(output_dir / f"{name}_shap_summary.png", dpi=300)
         plt.close()
 
     logging.info("All outputs written to %s", output_dir)
@@ -256,6 +281,7 @@ def parse_args():
     group.add_argument("--n_splits", type=int, default=5, help="CV folds (default 5)")
     group.add_argument('--no_cv', action='store_true', help='Skip CV and predict full dataset once')
     p.add_argument("--output_dir", type=Path, required=True, help="directory for outputs")
+    p.add_argument("--name", required=True, help="prefix for output files")
     p.add_argument("--log_level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     return p.parse_args()
 
@@ -276,6 +302,7 @@ def main():
             n_splits=args.n_splits,
             no_cv=args.no_cv,
             output_dir=args.output_dir,
+            name=args.name
         )
     except Exception:
         logging.exception("Evaluation failed")
