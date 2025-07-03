@@ -7,15 +7,16 @@ Inputs:
   --features       Path to TSV file containing features, label, and group columns.
   --label          Name of the label column in the TSV.
   --group_column   Name of the group column in the TSV.
-  --n_splits       Number of cross-validation folds (mutually exclusive with --no_cv). Default: 5.
-  --no_cv          If set, skip cross-validation and predict on the full dataset once.
+  --n_splits       Number of cross-validation folds (mutually exclusive with --no_cv). Useful for evaluating performance on the TRAINING set.
+  --no_cv          If set, skip cross-validation and predict on the full dataset once. Useful for evaluating performance on TEST split.
   --output_dir     Directory in which to write outputs (will be created if it does not exist).
   --name           Prefix to add to all output filenames.
   --log_level      Logging verbosity level (choices: DEBUG, INFO, WARNING, ERROR). Default: INFO.
+  --fasta          If set, it produces a fasta-formatted output of the features used to train the model. Features are named according to importance based on the feature_importance() function from scikit-learn.
+                   Works if features are DNA sequences, and if sequences match column names.
 
 Outputs:
-  <name>_predictions.tsv            Tab-separated file with 'truth' and 'prediction' columns for each sample.
-  <name>_probabilities.tsv          Tab-separated file with class probability columns indexed by sample ID.
+  <name>_predictions_probabilities.tsv            Tab-separated file with  class probability columns indexed by sample ID, and also with 'truth' and 'prediction' columns for each sample.
   <name>_classification_report.tsv  Tab-separated file summarizing precision, recall, f1-score for each class.
   <name>_confusion_matrix.tsv       Tab-separated file containing the confusion matrix (actual vs. predicted).
   <name>_feature_importances.tsv    Tab-separated file of feature importance scores averaged across folds (if available).
@@ -38,6 +39,7 @@ Usage Example:
     --output_dir results/ \
     --name experiment1 \
     --log_level INFO
+    --fasta
 """
 
 # ────────────────────────────── standard library ─────────────────────────────
@@ -48,7 +50,6 @@ import logging                       # console logging
 import sys                           # graceful exits
 from collections import defaultdict  # group counting helper
 from pathlib import Path             # path handling
-from typing import List              # type alias
 from typing import Optional, List
 
 # ──────────────────────────────── 3rd‑party ──────────────────────────────────
@@ -67,6 +68,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.utils import compute_sample_weight
+from sklearn.preprocessing import LabelEncoder
 
 # ─────────────────────────────── global consts ───────────────────────────────
 RSEED = 50
@@ -76,16 +78,10 @@ plt.rcParams.update({"figure.autolayout": True})
 # │                               utilities                                 │
 # ╰──────────────────────────────────────────────────────────────────────────╯
 
-def safe_mkdir(path: Path) -> None:
-    """Create *parent* directory of *path* if it isn’t `.`."""
-    parent = path.expanduser().resolve().parent
-    if parent != Path("."):
-        parent.mkdir(parents=True, exist_ok=True)
-
 
 def infer_problem_type(y: np.ndarray) -> str:
-    """Return `'multilabel'` (>2 classes) or `'binary'`."""
-    return "multilabel" if len(np.unique(y)) > 2 else "binary"
+    """Return `'muticlass'` (>2 classes) or `'binary'`."""
+    return "multiclass" if len(np.unique(y)) > 2 else "binary"
 
 
 def min_groups_per_class(y: np.ndarray, groups: np.ndarray) -> int:
@@ -123,6 +119,7 @@ def run_evaluation(
     no_cv: bool,
     output_dir: Path,
     name: str,
+    fasta: bool
 ) -> None:
     """Grouped‑CV evaluation: predictions, metrics, feature importances, SHAP."""
 
@@ -139,12 +136,16 @@ def run_evaluation(
     if label_col not in df.columns or group_col not in df.columns:
         raise KeyError("label or group column missing in TSV header")
 
-    y = df[label_col].values
+    # Encode string labels to integers
+    le = LabelEncoder()
+    y_raw = df[label_col].values
+    y = le.fit_transform(y_raw)
+    class_names = list(le.classes_)
+
     X = df.drop(columns=[label_col, group_col])
     groups = df[group_col].values
 
     problem_type = infer_problem_type(y)
-    class_names: List[str] = np.unique(y).tolist()
 
     # containers for results
     oof_true, oof_pred, oof_proba = [], [], []
@@ -206,14 +207,24 @@ def run_evaluation(
     # 4️⃣  Aggregate OOF results -----------------------------------------------
     y_true = np.concatenate(oof_true)
     y_pred = np.concatenate(oof_pred)
+
+    # Map integers back to original labels
+    if np.issubdtype(y_pred.dtype, np.integer):
+        y_pred_str = le.inverse_transform(y_pred)
+        y_true_str = le.inverse_transform(y_true)
+    else:
+        # assume they’re already the true‐label strings
+        y_pred_str = y_pred
+        y_true_str = le.inverse_transform(y_true)
+
     proba_df = pd.concat(oof_proba)
 
-    acc = accuracy_score(y_true, y_pred)
-    bacc = balanced_accuracy_score(y_true, y_pred)
+    acc = accuracy_score(y_true_str, y_pred_str)
+    bacc = balanced_accuracy_score(y_true_str, y_pred_str)
     logging.info("OOF Accuracy %.4f | Balanced Accuracy %.4f", acc, bacc)
 
-    report_df = pd.DataFrame(classification_report(y_true, y_pred, output_dict=True)).T.reset_index()
-    cm_arr = confusion_matrix(y_true, y_pred, labels=class_names)
+    report_df = pd.DataFrame(classification_report(y_true_str, y_pred_str, output_dict=True)).T.reset_index()
+    cm_arr = confusion_matrix(y_true_str, y_pred_str, labels=class_names)
     cm_df = pd.DataFrame(cm_arr, index=class_names, columns=class_names)
 
     if feature_imps:
@@ -222,6 +233,16 @@ def run_evaluation(
         fi_df = fi_df.sort_values("average", ascending=False)
     else:
         fi_df = pd.DataFrame()
+
+    #  ➡️  Optional: write FASTA of features by importance
+
+    if fasta and not fi_df.empty:
+        fasta_path = output_dir / f"{name}_features.fasta"
+        with open(fasta_path, "w") as fh:
+            for rank, feature in enumerate(fi_df.index, start=1):
+                fh.write(f">Feature_{rank}\n")
+                fh.write(f"{feature}\n")
+        logging.info("Written FASTA of features ➜ %s", fasta_path)
 
     # combine SHAP arrays across folds
     shap_stack = None
@@ -233,23 +254,41 @@ def run_evaluation(
     )
 
     # 5️⃣  Write artefacts ------------------------------------------------------
+        # Prepare files dict for downstream references
     files = {
-        "predictions": output_dir / f"{name}_predictions.tsv",
-        "probabilities": output_dir / f"{name}_probabilities.tsv",
+        "predictions_probabilities": output_dir / f"{name}_predictions_probabilities.tsv",
         "class_report": output_dir / f"{name}_classification_report.tsv",
         "conf_matrix": output_dir / f"{name}_confusion_matrix.tsv",
         "feat_importances": output_dir / f"{name}_feature_importances.tsv",
         "shap_values": output_dir / f"{name}_shap_values.npy",
     }
 
-    proba_df.to_csv(files["probabilities"], sep="\t")
-    pd.DataFrame({"truth": y_true, "prediction": y_pred}).to_csv(files["predictions"], sep="\t", index=False)
+    # Combine predictions and probabilities into a single TSV
+    combined_df = proba_df.copy()
+    combined_df["truth"] = y_true_str
+    combined_df["prediction"] = y_pred_str
+    combined_df = combined_df.reset_index().rename(columns={"index": "IsolateID"})
+    files["predictions_probabilities"].parent.mkdir(parents=True, exist_ok=True)
+    combined_df.to_csv(files["predictions_probabilities"], sep="\t", index=False)
+
     report_df.to_csv(files["class_report"], sep="\t", index=False)
     cm_df.to_csv(files["conf_matrix"], sep="\t")
     if not fi_df.empty:
         fi_df.to_csv(files["feat_importances"], sep="\t")
     if shap_stack is not None:
         np.save(files["shap_values"], shap_stack)
+        # Save per-class SHAP values as TSV files
+        if isinstance(shap_stack, list):
+            # Multiclass: one array per class
+            for idx, cls in enumerate(class_names):
+                df_shap = pd.DataFrame(
+                    shap_stack[idx], index=proba_df.index, columns=X.columns)
+                df_shap.to_csv(output_dir / f"{name}_{cls}_shap_values.tsv", sep="\t")
+        else:
+            # Binary (single 2D array): save under both class names
+            for cls in class_names:
+                df_shap = pd.DataFrame(shap_stack, index=proba_df.index, columns=X.columns)
+                df_shap.to_csv(output_dir / f"{name}_{cls}_shap_values.tsv", sep="\t")
 
     # 6️⃣  Diagnostic plots -----------------------------------------------------
     # confusion matrix heat‑map
@@ -289,6 +328,7 @@ def parse_args():
     p.add_argument("--output_dir", type=Path, required=True, help="directory for outputs")
     p.add_argument("--name", required=True, help="prefix for output files")
     p.add_argument("--log_level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    p.add_argument("--fasta", action="store_true", help = "If set, write a FASTA file of features sorted by importance")
     return p.parse_args()
 
 
@@ -308,7 +348,8 @@ def main():
             n_splits=args.n_splits,
             no_cv=args.no_cv,
             output_dir=args.output_dir,
-            name=args.name
+            name=args.name,
+            fasta=args.fasta
         )
     except Exception:
         logging.exception("Evaluation failed")
