@@ -443,7 +443,7 @@ ggplot(all_cm, aes(x = Predicted, y = True, fill = Count)) +
 ```{r}
 supp_dataset_1<-all_metadata[,-c(5:13)]
 
-#write.table(supp_dataset_1,'../results/99_supplementary_data/Supplementary_dataset_1.tsv',row.names = FALSE, sep='\t', quote = FALSE)
+#write.table(supp_dataset_1,'../results/99_supplementary_dataset/Supplementary_dataset_1.tsv',row.names = FALSE, sep='\t', quote = FALSE)
 ```
 
 
