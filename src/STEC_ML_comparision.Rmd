@@ -118,7 +118,7 @@ all_performance_data<-rbind(training_XGBC_none_t5_max_RF,training_RF_none_t5_max
 ```
 
 
-##1.4 Figure 1 & Supplementary FIgure 2 - Test set and Training set in all metrics 
+##1.4 Figure 1 & Supplementary FIgure 3 - Test set and Training set in all metrics 
 
 ```{r fig.width=6, fig.height=6, dpi=300}
 
@@ -175,67 +175,20 @@ ggplot(all_train_metrics, aes(x=model, y=Value, fill=X)) +
   facet_wrap(~Metric,ncol=1,strip.position = "right") + theme(strip.text.y = element_text(size = 20))
 
 ```
-#ACCURACY
-##2.1 Supplementary Figure 2 - Global accuracy
-```{r fig.width=6, fig.height=4, dpi=300}
+#2. ACCURACY
+
+##2.1 Global Accuracy and CV Accuracy
+
+```{r}
+
 accruacy_metrics<-all_performance_data[all_performance_data$X=='accuracy', ]
 
 #write.csv(accruacy_metrics, '../results/05_classification_reports/multilabel/accuracy_metrics.csv',  row.names = FALSE, quote = FALSE)
-
-#plot a connected scatter plot
-plot_accuracy_connected<-ggplot(accruacy_metrics, aes(x=model,y=as.numeric(Value)))+
-  scale_colour_manual(values=c("#0270ff","#8E8B8B"))+
-  geom_point(aes(colour=dataset))+
-  geom_line(aes(group = model),color="grey") +
-  theme_bw()+ 
-  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
-        axis.title.x = element_text(size=16,face='bold'), 
-        axis.text.x=element_text(size=14, angle=90, vjust=0.5), 
-        panel.grid.major.x = element_blank(),
-        axis.title.y=element_text(size=16,face="bold"), 
-        axis.text.y=element_text(size=12,angle=0), 
-        legend.title = element_text(size = 14), 
-        legend.text = element_text(size = 12), 
-        legend.position = 'top') +
-   xlab('') + ylab('Model Accuracy') +
-  guides(colour = guide_legend('Dataset', override.aes = list(size = 3)))
-
-plot_accuracy_connected
 
 test_accruacy_metrics<-accruacy_metrics[accruacy_metrics$dataset=='test', ]
 test_accruacy_metrics$model<-gsub("-Accuracy","",test_accruacy_metrics$model)
 test_accruacy_metrics$model<-gsub("-Upsample","-Random",test_accruacy_metrics$model)
 
-plot_test_accuracy_bar<-ggplot(test_accruacy_metrics, aes(x=model,y=as.numeric(Value), fill=model))+
-  scale_fill_manual(values=c("#333333", "#555555" ,"#8E8B8B","#cccccc","#001d6c", "#0043ce", "#4589ff", "#a6c8ff"))+
-  geom_bar(stat='identity')+
-  geom_text(aes(label=round(Value,3), size=6), vjust=-0.2) +
-  theme_bw()+ 
-  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
-        axis.title.x = element_text(size=16,face='bold'), 
-        axis.text.x=element_text(size=14, angle=90, vjust=0.5), 
-        panel.grid.major.x = element_blank(),
-        axis.title.y=element_text(size=16,face="bold"), 
-        axis.text.y=element_text(size=12,angle=0), 
-        legend.title = element_text(size = 14), 
-        legend.text = element_text(size = 12), 
-        legend.position = 'none') +
-   xlab('') + ylab('Accuracy') +
-  scale_y_continuous(
-    limits = c(0, 1),     # Set y-axis limits from 0 to 1
-    breaks = seq(0, 1, 0.1)  # Set y-axis tick marks at intervals of 0.1
-  )+
-  guides(colour = guide_legend('Dataset', override.aes = list(size = 3)))
-
-plot_test_accuracy_bar
-
-
-
-```
-
-##2.2 Accuracy and CV 
-
-```{r}
 #1. Import and wrangle the data
 #XGBC
 acc_cv_XGBC_none_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/03_cv/multilabel/XGBC_none_t5_max_RF.tsv")
@@ -290,7 +243,7 @@ acc_mean_test$dataset<-ifelse(acc_mean_test$dataset=='training','Training mean',
 
 ```
 
-##plot
+## 2.2 Supplementary Figure 2 - Global accuracy
 
 ```{r fig.width=6, fig.height=6, dpi=300}
 ggplot() +
@@ -349,40 +302,6 @@ all_test_acc <- data.frame("Value" = c(XGBC_test_acc_value[1], RF_test_acc_value
 
 ```
 
-##2.2 Plot
-```{r fig.width=3, fig.height=3, dpi=300}
-accuracy_training_plot<-ggplot(all_training_acc_long, aes(x=classifier, y=Value, fill=classifier)) + 
-  #geom_violin(alpha=0.4) + 
-  geom_boxplot(alpha=0.4) +
-  geom_jitter(alpha=0.9, width=0.2, coour='black')+
-  theme_minimal()+
-  scale_fill_manual(values = c('#7a7a7a','#3b528b'))+
-  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
-        axis.title.x = element_text(size=18,face='bold'), 
-        axis.text.x=element_text(size=14,angle=0, hjust=0.5),
-        axis.title.y=element_text(size=18,face="bold"), 
-        axis.text.y=element_text(size=12,angle=0),
-        axis.ticks.x = element_blank(),
-        legend.title = element_text(size = 12), 
-        legend.text = element_text(size = 12),
-        legend.position='none',
-        #panel.grid.major.x = element_blank(),
-        #panel.grid.minor.x = element_blank(),
-        #panel.border = element_blank(),
-        #panel.background = element_blank(),
-        strip.text.x = element_text(size = 12))+
-        #panel.spacing = unit(0, "cm"))  +
-  labs(fill='') +
-   xlab('Classifier') + 
-  ylab('Accuracy') +
-  scale_y_continuous(
-    limits = c(0, 1),     # Set y-axis limits from 0 to 1
-    breaks = seq(0, 1, 0.1)  # Set y-axis tick marks at intervals of 0.1
-  )
-
-accuracy_training_plot
-```
-
 
 #3. XGB vs Other Classification schemes
 ##3.1 Gather and wrangle data
@@ -434,7 +353,7 @@ for (i in seq_along(prediction_columns)) {
 
 
 ```
-##3.2 Plot accuracies
+##3.2 Supplementary Figure S4A - XGBC vs Lineage vs Stx
 
 ```{r fig.width=3, fig.height=3, dpi=300}
 accuracy_df<-as.data.frame(t(as.data.frame(accuracies)))
@@ -477,37 +396,10 @@ accuracy_plot<-ggplot(accuracy_df_plot, aes(x=reorder(Classifier,-Accuracy), y=A
 
 accuracy_plot
 
-accuracy_df_asm<-accuracy_df[accuracy_df$Classifier!="lineage",]
-
-accuracy_plot_asm<-ggplot(accuracy_df_asm, aes(x=reorder(Classifier,-Accuracy), y=Accuracy, fill=Classifier)) + geom_bar(stat='identity', position='stack', width = 0.8) +
-  geom_text(aes(label=round(Accuracy,3), size=6), vjust=-0.1) +
-  theme_bw()+
-  scale_fill_manual(values = c('#9e77a9','#3b528b'))+
-  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
-        axis.title.x = element_text(size=18,face='bold'), 
-        axis.text.x=element_text(size=13,angle=0, hjust=0.5),
-        axis.title.y=element_text(size=18,face="bold"), 
-        axis.text.y=element_text(size=12,angle=0),
-        axis.ticks.x = element_blank(),
-        legend.title = element_text(size = 12), 
-        legend.text = element_text(size = 12),
-        legend.position='none',
-        panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank(),
-        panel.border = element_blank(),
-        panel.background = element_blank(),
-        strip.text.x = element_text(size = 12))+
-        #panel.spacing = unit(0, "cm"))  +
-  labs(fill='') +
-   xlab('') + 
-  ylab('Accuracy')
-
-accuracy_plot_asm
-
 
 ```
 
-#Build confusion matrices
+## 3.3 Supplementary Figure S4B - Confusion matrix
 ```{r fig.width=3, fig.height=4, dpi=300}
 #1. XGBC
 conf_matrix_xgb <- table(all_metadata$true_risk, all_metadata$XGBC_balanced_risk_pred)
@@ -534,19 +426,6 @@ all_cm<-rbind(conf_matrix_xgb_df,conf_matrix_lineage_df,conf_matrix_stx_df)
 
 ggplot(all_cm, aes(x = Predicted, y = True, fill = Count)) +
   geom_tile() + # This creates the tiles for the heatmap
-  geom_text(aes(label = Count), color = "black", size = 7) + # Add counts to the tiles
-  scale_fill_gradient(low ="grey", high = "blue") + # Change color gradient from blue to yellow
-  labs(title = "", x = "Predicted Risk", y = "True Risk") +
-  theme_minimal() + # Minimal theme
-  theme(axis.text.x = element_text(angle = 0, hjust = 1, size=10),
-        axis.title.x = element_text(size=16),
-        axis.text.y = element_text(angle = 0, hjust = 1, size=10),
-        axis.title.y = element_text(size=16)) + # Adjust text angle for x-axis labels
-  facet_wrap(~model,ncol=1,strip.position = "right") + theme(strip.text.y = element_text(size = 20))
-
-
-ggplot(all_cm, aes(x = Predicted, y = True, fill = Count)) +
-  geom_tile() + # This creates the tiles for the heatmap
   geom_text(aes(label = Count), color = "black", size = 5) + # Add counts to the tiles
   scale_fill_gradient(low ="white", high = "red") + # Change color gradient from blue to yellow
   labs(title = "", x = "Predicted Risk", y = "True Risk") +
@@ -559,39 +438,17 @@ ggplot(all_cm, aes(x = Predicted, y = True, fill = Count)) +
   facet_wrap(~model,ncol=1,strip.position = "right") + theme(strip.text.y = element_text(size = 14))
 
 ```
-#ASM
 
-```{r fig.width=5, fig.height=3, dpi=300}
-
-#all_cm_asm<-rbind(conf_matrix_xgb_df,conf_matrix_stx_df)
-
-#all_cm_asm$model<-factor(all_cm_asm$model,levels =c ("XGBC","Stx"))
-
-#ggplot(all_cm_asm, aes(x = Predicted, y = True, fill = Count)) +
-#  geom_tile() + # This creates the tiles for the heatmap
-#  geom_text(aes(label = Count), color = "black", size = 7) + # Add counts to the tiles
-#  scale_fill_gradient(low ="white", high = "red") + # Change color gradient from blue to yellow
-#  labs(title = "", x = "Predicted Risk", y = "True Risk") +
-#  theme_minimal() + # Minimal theme
-#  theme(axis.text.x = element_text(angle = 0, hjust = 1, size=14),
-#        axis.title.x = element_text(size=20),
-#        axis.text.y = element_text(angle = 0, hjust = 1, size=14),
-#        axis.title.y = element_text(size=20)) + # Adjust text angle for x-axis labels
-#  facet_wrap(~model,ncol=2,strip.position = "top") + theme(strip.text.x = element_text(size = 20))
-
-```
-
-
-##3.3 Supplementary Table 1
+##3.3 Supplementary Dataset_1
 ```{r}
-supp_table_1<-all_metadata[,-c(5:13)]
+supp_dataset_1<-all_metadata[,-c(5:13)]
 
-#write.table(supp_table_1,'../manuscript_files/supplementary_data/Supplementary_data_1.tsv',row.names = FALSE, sep='\t', quote = FALSE)
+#write.table(supp_dataset_1,'../results/99_supplementary_data/Supplementary_dataset_1.tsv',row.names = FALSE, sep='\t', quote = FALSE)
 ```
 
 
-#8. Tree metadata
-##8.1 MOdify annotations file for input to tree
+#4. FEATURE ANNOTATIONS
+##4.1 MOdify annotations file for input to tree
 
 ```{r}
 features_ann <- read.delim("~/RF_STEC/rf_0157/results/12_annotations/2024_07_feature_annotations_TD_ambiguous.tsv", header = FALSE)
@@ -605,7 +462,7 @@ features_ann<-features_ann %>% mutate(ANN=paste(Feature, Ann_modified, sep=' - '
 #write.table(features_ann,'~/RF_STEC/rf_0157/results/12_annotations/2024_07_feature_annotations_JP_ambiguous.tsv',row.names = FALSE, sep='\t')
 ```
 
-##8.2 Explore features distributions
+##4.2 Explore features distributions
 Coding vs non-coding and Phage vs non-phage
 ```{r}
 #1. Based on phage presence
@@ -624,7 +481,7 @@ features_ann_final_characterization<-features_ann %>% group_by(Phage,ann_hyp) %>
 features_ann_final_characterization<- features_ann_final_characterization %>% group_by(Phage) %>% mutate(percentage=round(count/sum(count)*100,2))
 ```
 
-##8.3 FEATURES ALINGING TO CDS
+## 4.3 count features aligning to different elements (CDS, IR, PHAGES, STX-PHAGES, etc )
 ```{r}
 #Get a list of the featuers and count them
 known_prot_features<-features_ann[features_ann$ann_hyp=="Known protein",]
@@ -648,10 +505,7 @@ known_prot_features_count_non_phage<-known_prot_features_count[known_prot_featur
 #write.table(known_prot_features_count, "../manuscript_files/table_1.tsv", sep="\t", quote = FALSE,  row.names = FALSE)
 ```
 
-
-
-##KNVM FIGURES CODE!
-##8.3 PLot Features distributions
+##4.4 SUPPLEMENTARY FIGURE S5 - FEATURES DISTRIBUTIONS (CDS, PHAGES, ETC.)
 
 ```{r fig.width=4, fig.height=3, dpi=300}
 
@@ -734,79 +588,5 @@ phage_annotation_content_plot<-ggplot(features_ann_final_characterization_asm, a
 phage_annotation_content_plot
 
 ```
-#9. Feature importances
-##9.1 Import data and merge with annotations
-```{r}
-#1. Import data
-features_importances <- read.delim("~/RF_STEC/rf_0157/results/06_feature_importances/balanced_accuracy/training_XGBC_none_t5_max_RF.tsv")
-features_importances<-features_importances[,c(1,12)]
 
-#1. Combine with annotation
-feature_importances_ann<-left_join(features_importances,features_ann[,c(2,8,10,11)],by=c("feature"="Sequence"))
-
-feature_importances_ann[13,4]<-	"Feature13 - Prophage integrase IntS [Non STX Phage]"
-feature_importances_ann[13,3]<-	"Non STX Phage"
-
-```
-
-##9.2 Plot the data
-```{r fig.height=3, dpi=300}
-
-feature_importances<-ggplot(feature_importances_ann[c(1:20),], aes(x=reorder(ANN,average), y=average, fill=Phage)) + 
-  geom_bar(stat='identity', position='stack', alpha=0.8) +
-  theme_bw()+
-  scale_fill_manual(values = c('#0d0887',"#f0f921",'#ed7953'))+
-  theme(plot.title = element_text(size=12,hjust = 0.5,face='bold'),
-        axis.title.x = element_text(size=12,face='bold'), 
-        axis.text.x=element_text(size=8,angle=0, hjust=0.5),
-        axis.title.y=element_text(size=12,face="bold"), 
-        axis.text.y=element_text(size=10,angle=0),
-        axis.ticks.x = element_blank(),
-        legend.title = element_text(size = 12), 
-        legend.text = element_text(size = 8),
-        legend.position='top',
-        #panel.grid.major.x = element_blank(),
-        #panel.grid.minor.x = element_blank(),
-        panel.border = element_blank(),
-        panel.background = element_blank(),
-        strip.text.x = element_text(size = 12))+
-        #panel.spacing = unit(0, "cm"))  +
-  labs(fill='') +
-   xlab('Feature annotation') + 
-  ylab('Gini Importance') +
-  coord_flip()
-
-feature_importances
-
-```
-
-#TMP - REMOVE LATER
-#merge metadata with final labels
-```{r}
-feats <- read.csv("~/RF_STEC/rf_0157/data/03_muvr_features/multilabel/2023_jp_complete_muvr_rf_max.tsv", sep="\t")
-allmeta<-read.csv("~/RF_STEC/rf_0157/2023_jp_meta_file.tsv", sep="\t")
-
-tmp_data<-inner_join(feats,allmeta[,c(1,6,8)],by=c("X"="SRA"))
-tmp_data_bin<-inner_join(feats,allmeta[,c(1,6,7)],by=c("X"="SRA"))
-
-
-#load train data
-train_meta<-read.csv("~/RF_STEC/rf_0157/data/02_test_train_split/2023_train_set_jp.tsv", sep="\t")
-
-tmp_data_train<-tmp_data[tmp_data$X %in% train_meta$SRA,]
-tmp_data_test<-tmp_data[!tmp_data$X %in% train_meta$SRA,]
-
-tmp_data_train_bin<-tmp_data_bin[tmp_data_bin$X %in% train_meta$SRA,]
-tmp_data_test_bin<-tmp_data_bin[!tmp_data_bin$X %in% train_meta$SRA,]
-
-#write.table(tmp_data_train, '../tmp_results_test/04_muvr_final_output/train_muvr_features.tsv', sep="\t", row.names = FALSE, quote = FALSE)
-
-#write.table(tmp_data_test, '../tmp_results_test/04_muvr_final_output/test_muvr_features.tsv', sep="\t", row.names = FALSE, quote = FALSE)
-
-
-#write.table(tmp_data_train_bin, '../tmp_results_test/04_muvr_final_output/train_muvr_features_bin.tsv', sep="\t", row.names = FALSE, quote = FALSE)
-
-#write.table(tmp_data_test_bin, '../tmp_results_test/04_muvr_final_output/test_muvr_features_bin.tsv', sep="\t", row.names = FALSE, quote = FALSE)
-
-```
 
