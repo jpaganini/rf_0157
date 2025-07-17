@@ -42,7 +42,7 @@ names(rf_max_muvr) <- new_col_names
 
 #3. Co-occurence analysis
 
-##3.1 Hamming distances VS jaccard distances distributions
+##3.1  Calculate jaccard distances distributions
 In this case, we want the hamming distances between the presence/absence of the features in different isolates. So, we will consider each feature as an indiidual 'observation' (rows).
 ```{r}
 #1. Transpose the matrix
@@ -51,141 +51,23 @@ rf_max_muvr_t<-t(rf_max_muvr)
 #2. Check how many times each features is present in total
 row_sums <- rowSums(rf_max_muvr_t, na.rm = TRUE)
 row_sums_df <- data.frame(row_sums)
-#There are some FEatures that are only present in seven genomes. This can cause issues when calculating the Hamming distances. Since they'll have more 0 in common when contrasted with others.
 
-
-#2. Calculate hamming distances using the ape package
-hamming_distances<-dist.gene(rf_max_muvr_t, method = "percentage", pairwise.deletion = FALSE, variance = FALSE)
-#3. Convert the dist object into a matirx
-hamming_distances_matrix<-as.matrix(hamming_distances)
-#4. Convert the matrix into a pairwise distances - using reshape2 package
-hamming_distances_pairwise<-melt(hamming_distances_matrix)
-#5. Remove self-connections
-hamming_distances_pairwise <- subset(hamming_distances_pairwise, Var1 != Var2)
-
-#3.Calculate Jaccard distances
+#3.Calculate Jaccard distances using the veggdist
 jaccard_distances<-vegdist(rf_max_muvr_t,method="jaccard",binary = TRUE)
 jaccard_distances_matrix<-as.matrix(jaccard_distances)
 jaccard_distances_pairwise<-melt(jaccard_distances_matrix)
 jaccard_distances_pairwise <- subset(jaccard_distances_pairwise, Var1 != Var2)
 
 
-hamming_distances_pairwise_filter<-hamming_distances_pairwise[hamming_distances_pairwise$Var1=='Feature1665' & hamming_distances_pairwise$Var2=='Feature1201',]
 jaccard_distances_pairwise_filter<-jaccard_distances_pairwise[jaccard_distances_pairwise$Var1=='Feature1665' & jaccard_distances_pairwise$Var2=='Feature1201',]
 
 jaccard_distances_pairwise_filter<-jaccard_distances_pairwise[jaccard_distances_pairwise$Var1=='Feature1' & jaccard_distances_pairwise$Var2=='Feature2',]
 
 
-#5. Plot the distribution of distances
-hamming_distance_distribution_plot <- ggplot(hamming_distances_pairwise, aes(x=value)) + 
-    geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
-                   binwidth=0.01,
-                   colour="black", fill="#b5b5b5") +
-  geom_density(alpha=.5, fill="#FF9933") +
-  #geom_vline(xintercept = 0.1, linetype = 'dashed') +
-  theme_minimal()+ 
-  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
-        axis.title.x = element_text(size=24,face='bold'), 
-        axis.text.x=element_text(size=20),
-        panel.grid.major.x = element_blank(), 
-        axis.title.y=element_text(size=24,face="bold"), 
-        axis.text.y=element_text(size=20,angle=0), 
-        legend.title = element_text(size = 22), 
-        legend.text = element_text(size = 20)) +
-  xlab('Hamming distance') + ylab('Density') 
-
-hamming_distance_distribution_plot
-
-jaccard_distance_distribution_plot <- ggplot(jaccard_distances_pairwise, aes(x=value)) + 
-    geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
-                   binwidth=0.01,
-                   colour="black", fill="#b5b5b5") +
-  geom_density(alpha=.5, fill="#FF9933") +
-  #geom_vline(xintercept = 0.1, linetype = 'dashed') +
-  theme_minimal()+ 
-  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
-        axis.title.x = element_text(size=24,face='bold'), 
-        axis.text.x=element_text(size=20),
-        panel.grid.major.x = element_blank(), 
-        axis.title.y=element_text(size=24,face="bold"), 
-        axis.text.y=element_text(size=20,angle=0), 
-        legend.title = element_text(size = 22), 
-        legend.text = element_text(size = 20)) +
-  xlab('Jaccard distance') + ylab('Density') 
-
-jaccard_distance_distribution_plot
-
-
-#THIS IS REDUNDANTE, NECESSARY FOR RUNNING THE CODE WITHOUT RE-RUNNING ALL NETWORKS
-#Created a wieghted graph, reversing the value of the hamming distance
-weight_graph <- data.frame(From_to = jaccard_distances_pairwise$Var1,
-                           To_from = jaccard_distances_pairwise$Var2,
-                           weight =1- jaccard_distances_pairwise$value)
 
 ```
 
-###3.2.2 Explore potential different distance cutoffs for hamming distance
-We will explore how the different cut-offs affect the:
-1-size of the super cluster
-2-total number of clusters
-3-The modularity
-4-Transitivity
-```{r fig.width=8, fig.height=12, dpi=300, eval=FALSE}
-#define empty vectors
-super_cluster_vector<-vector() #to hold the size of the biggest component created in the network
-number_cluster_vector<-vector() #to hold the total number of clusters
-edge_vector<-vector() #to hold the mash distance that will be used a cut-off
-modularity_vector<-vector() #to hold the modularity values
-transitivity_vector<-vector() #to hold the values of transitivity
-
-#Created a wieghted graph, reversing the value of the hamming distance
-weight_graph <- data.frame(From_to = hamming_distances_pairwise$Var1,
-                           To_from = hamming_distances_pairwise$Var2,
-                           weight =1- hamming_distances_pairwise$value)
-
-for (edge in seq(0.01,1,0.01)){
-  test_graph<-weight_graph
-  test_graph<-subset(test_graph, test_graph$weight > 1-edge)
-  graph_pairs_test <- graph_from_data_frame(test_graph, directed = FALSE)
-  super_cluster<-max(components(graph_pairs_test,mode = "strong")$csize)
-  number_clusters<-components(graph_pairs_test,mode = "strong")$no
-  modularity<-modularity(graph_pairs_test,components(graph_pairs_test,mode = "strong")$membership)
-  transitivity<-transitivity(graph_pairs_test,type="global")
-  super_cluster_vector<-append(super_cluster_vector,super_cluster)
-  number_cluster_vector<-append(number_cluster_vector,number_clusters)
-  edge_vector<-append(edge_vector,edge)
-  modularity_vector<-append(modularity_vector,modularity)
-  transitivity_vector<-append(transitivity_vector,transitivity)
-}
-
-edge_cutoff<-data.frame(edge_vector,number_cluster_vector,super_cluster_vector,modularity_vector,transitivity_vector)
-
-#make it long format so you can plot it
-edge_cutoff_long<-melt(edge_cutoff,id.vars=c('edge_vector'), measure.vars =c('super_cluster_vector','number_cluster_vector','modularity_vector','transitivity_vector'))
-#rename the variables
-edge_cutoff_long$variable<-gsub(edge_cutoff_long$variable,pattern='super_cluster_vector', replacement = 'Size of super-cluster')
-edge_cutoff_long$variable<-gsub(edge_cutoff_long$variable,pattern='number_cluster_vector', replacement = 'Nr. of clusters')
-edge_cutoff_long$variable<-gsub(edge_cutoff_long$variable,pattern='modularity_vector', replacement = 'Network modularity')
-edge_cutoff_long$variable<-gsub(edge_cutoff_long$variable,pattern='transitivity_vector', replacement = 'Network transitivity')
-
-edge_cutoff_long$variable <- factor(edge_cutoff_long$variable, levels = c('Size of super-cluster','Nr. of clusters','Network modularity','Network transitivity'))
-
-ggplot(edge_cutoff_long, aes(x = edge_vector, y = value)) +
-  geom_path() +
-  geom_point(size = 1, aes(colour=variable)) +
-  theme_bw() +
-  scale_colour_viridis(discrete = T) +
-  #geom_vline(xintercept = 0.008, linetype = 'dashed')+
-  geom_vline(xintercept = 0.03, linetype = 'dashed', colour='red')+
-  theme(axis.title.x = element_text(size=16), axis.text.x=element_text(size=13,angle=0),
-        axis.title.y=element_text(size=0), axis.text.y=element_text(size=14,angle=0), 
-        legend.title = element_text(size = 0), 
-        legend.text = element_text(size = 0),
-        legend.position='none')  +
-   xlab('Edge drawing value') + 
-  facet_wrap(~variable,ncol=1,scales='free_y') + theme(strip.text.x = element_text(size = 15))
-
-```
+## 3.2 Explore potential different distance cutoffs for Jaccard distances
 
 ```{r fig.width=8, fig.height=12, dpi=300, eval=FALSE}
 #define empty vectors
@@ -247,54 +129,30 @@ ggplot(edge_cutoff_long, aes(x = edge_vector, y = value)) +
 
 
 
-###3.2.3 Select a jaccard distance of 1 as cut-off
-This is, features are clusterd only when they co-occur in all isolates.
+## 3.3 Select a jaccard distance of 1 as cut-off
+This is, features are clustered only when they co-occur in all isolates.
 ```{r fig.width=20, fig.height=20, dpi=300}
-#keep only connections in which the weight is above 0.997
+#keep only connections in which the weight is 1
 #coocurrence_graph_df <- subset(weight_graph, weight_graph$weight >= (1-0.11))
 coocurrence_graph_df <- subset(weight_graph, weight_graph$weight >= (1))
 coocurrence_graph <- graph_from_data_frame(coocurrence_graph_df, directed = FALSE)
 #decomposed graph into individual subgraphs
 coocurrence_subgraphs<-components(coocurrence_graph)
 
-#Filtering cluster with less than 3 nodes - probably will be removed
-#set minimal number of nodes
-# min_size<-3
-# #identify subgraphs smaller than min_size
-# small_subgraphs<-which(table(coocurrence_subgraphs$membership)<min_size)
-# #Get a list of nodes that should be kept
-# coocurrence_graph_large_vertices = V(coocurrence_graph)[!(coocurrence_subgraphs$membership %in% small_subgraphs)]
-# #Keep only the subgraphs with a siz larger than 3
-# coocurrence_graph_large  = induced_subgraph(coocurrence_graph, coocurrence_graph_large_vertices)
-# coocurrence_subgraphs_large<-components(coocurrence_graph_large)
-# cluster_membership<-as.data.frame(coocurrence_subgraphs_large$membership)
-
 cluster_membership<-as.data.frame(coocurrence_subgraphs$membership)
 cluster_membership$Feature<-rownames(cluster_membership)
 names(cluster_membership)<-c("Cluster_id","Feature")
-#graph_large<-as.data.frame(coocurrence_graph_large_vertices)
-
-#Get a number for the singletons
-
-
-#Combine with annotations
-#features_ann <- read.delim("~/RF_STEC/rf_0157/results/12_annotations/2024_05_features_annotations_JP.tsv")
-
-#cluster_membership<-left_join(cluster_membership,features_ann[,c(1,10)], by='Feature')  
-
 ```  
-```{r}
 
-```
 
 
 #4. SHAP VALUES
-###4. Create network using shap values.
+## 4.1 Create network using shap values.
 Since SHAP values are more consistent for determining the feature importances in ensemble models:
 arXiv:1802.03888v3 (https://arxiv.org/pdf/1802.03888)
 A Unified Approach to Interpreting Model Predictions (https://proceedings.neurips.cc/paper_files/paper/2017/file/8a20a8621978632d76c43dfd28b67767-Paper.pdf)
 
-##4.1. Load the SHAP values importances and feature annoations
+##4.2 Load the SHAP values importances and feature annoations
 ```{r}
 bd_shap_raw <- read.delim("~/RF_STEC/rf_0157/results/06_feature_importances/multilabel/balanced_accuracy/SHAP_BD_XGBC_none_t5_max_RF.tsv", row.names = 1)
 d_shap_raw <- read.delim("~/RF_STEC/rf_0157/results/06_feature_importances/multilabel/balanced_accuracy/SHAP_D_XGBC_none_t5_max_RF.tsv", row.names = 1)
@@ -304,7 +162,7 @@ features_ann_shap <- read.delim("~/RF_STEC/rf_0157/results/12_annotations/2024_0
 
 ```
 
-#4.2 Rename the colums
+#4.3 Rename the colums
 ```{r}
 rename_shap<-function(shap_value_df, names_dict) {
   current_col_names <- names(shap_value_df) #get the names of features from the current DF
@@ -411,7 +269,7 @@ bd_absolute_shap_cluster<-cluster_shap_values(bd_absolute_shap_ann)
 
 ```
 
-#Create better names for each cluster before plotting
+## 4.6 - Supplementary DAtaset 3 and rename before plotting
 
 ```{r}
 rename_clusters<-function(input_df) {
@@ -437,28 +295,22 @@ hus_absolute_shap_cluster<-rename_clusters(hus_absolute_shap_cluster)
 bd_absolute_shap_cluster<-rename_clusters(bd_absolute_shap_cluster)
 d_absolute_shap_cluster<-rename_clusters(d_absolute_shap_cluster)
 
-#write.table(hus_absolute_shap_cluster,"../manuscript_files/supplementary_data/hus_absolute_shap_cluster.tsv", sep='\t', row.names = FALSE, quote = FALSE, col.names = TRUE)
-#write.table(bd_absolute_shap_cluster,"../manuscript_files/supplementary_data/bd_absolute_shap_cluster.tsv", sep='\t', row.names = FALSE, quote = FALSE, col.names = TRUE)
-#write.table(d_absolute_shap_cluster,"../manuscript_files/supplementary_data/d_absolute_shap_cluster.tsv", sep='\t', row.names = FALSE, quote = FALSE, col.names = TRUE)
+#These 3 tables, pulled together and re-format constitute supplementary dataset 3
+#write.table(hus_absolute_shap_cluster,"../results/99_supplementary_dataset/hus_absolute_shap_cluster.tsv", sep='\t', row.names = FALSE, quote = FALSE, col.names = TRUE)
+#write.table(bd_absolute_shap_cluster,"../results/99_supplementary_dataset/bd_absolute_shap_cluster.tsv", sep='\t', row.names = FALSE, quote = FALSE, col.names = TRUE)
+#write.table(d_absolute_shap_cluster,"../results/99_supplementary_dataset/d_absolute_shap_cluster.tsv", sep='\t', row.names = FALSE, quote = FALSE, col.names = TRUE)
 
 ```
 
 
-#6. PLOTs
+#5. PLOTs
 
-##6.1 Filter the top 10 clusters for each outcome
+##5.1 Filter the top 10 clusters for each outcome
 
 ```{r}
 
 get_top_feature_clusters<-function(feature_cluster_shap_df, raw, label, Category){
 
-# for (i in 1:length(feature_cluster_shap_df$Cluster_id)) {
-#   if (is.na(feature_cluster_shap_df$Cluster_id[i])) {
-#     feature_cluster_shap_df$Cluster_ann[i] <- as.character(feature_cluster_shap_df$ANN[i])
-#   } else {
-#     feature_cluster_shap_df$Cluster_ann[i] <- paste("Cluster_", feature_cluster_shap_df$Cluster_id[i], sep = "")
-#   }
-# }
 
 feature_cluster_shap_raw<-feature_cluster_shap_df
 feature_cluster_shap_df<-feature_cluster_shap_df[feature_cluster_shap_df$Category==Category,]
@@ -499,64 +351,16 @@ all_absence_shap_barplot_data<-rbind(hus_absence_shap_barplot_data,bd_absence_sh
 
 ```
 
-#Create a file to later obtain a FASTA sequence of each important feature, for the BRIG plots
+## 5.2 Filter top features
 ```{r}
 #export a file with Feature,CLuster format
 hus_presence_shap_fasta<-get_top_feature_clusters(hus_absolute_shap_cluster,TRUE, "HUS","Presence")
 bd_presence_shap_fasta<-get_top_feature_clusters(bd_absolute_shap_cluster,TRUE,"BD","Presence")
 d_presence_shap_fasta<-get_top_feature_clusters(d_absolute_shap_cluster,TRUE,"D","Presence")
 
-
-#write.table(hus_presence_shap_fasta,"../results/13_cluster_features/hus_feat_clust_index.csv", sep=',', row.names = FALSE, quote = FALSE, col.names = FALSE)
-#write.table(bd_presence_shap_fasta,"../results/13_cluster_features/bd_feat_clust_index.csv", sep=',', row.names = FALSE, quote = FALSE, col.names = FALSE)
-#write.table(d_presence_shap_fasta,"../results/13_cluster_features/d_feat_clust_index.csv", sep=',', row.names = FALSE, quote = FALSE, col.names = FALSE)
 ```
 
-#6.2 Explore the intergenic Regions
-```{r eval=FALSE}
-#1. Import data from flanking regions
-ir_flanking <- read.csv("~/RF_STEC/rf_0157/results/12_annotations/IR/all_flanking_results.tsv", sep="\t")
-
-#cLEAN
-HUS_ir_presence <- hus_presence_shap_fasta[grep("IR", hus_presence_shap_fasta$Cluster_ann), ]
-HUS_flanking_presence<- ir_flanking[ir_flanking$Query.ID %in% HUS_ir_presence$Feature,]
-
-BD_ir_presence <- bd_presence_shap_fasta[grep("IR", bd_presence_shap_fasta$Cluster_ann), ]
-BD_flanking_presence<- ir_flanking[ir_flanking$Query.ID %in% BD_ir_presence$Feature,]
-
-D_ir_presence <- d_presence_shap_fasta[grep("IR", d_presence_shap_fasta$Cluster_ann), ]
-D_flanking_presence<- ir_flanking[ir_flanking$Query.ID %in% D_ir_presence$Feature,]
-
-#Create  a new column just with the product
-HUS_flanking_presence$upstream_product <- sub(".*?;", "", HUS_flanking_presence$upstream_feature)
-HUS_flanking_presence$downstream_product <- sub(".*?;", "", HUS_flanking_presence$downstream_feature)
-HUS_flanking_presence$overlapping_product <- sub(".*?;", "", HUS_flanking_presence$Overlapping.Features)
-
-BD_flanking_presence$upstream_product <- sub(".*?;", "", BD_flanking_presence$upstream_feature)
-BD_flanking_presence$downstream_product <- sub(".*?;", "", BD_flanking_presence$downstream_feature)
-
-D_flanking_presence$upstream_product <- sub(".*?;", "", D_flanking_presence$upstream_feature)
-D_flanking_presence$downstream_product <- sub(".*?;", "", D_flanking_presence$downstream_feature)
-
-
-#GROUP PER FEATURE AND SUMMARIZE
-HUS_flanking_summary<-HUS_flanking_presence %>% group_by(Query.ID,upstream_product,downstream_product) %>% summarise(count=n())
-HUS_flanking_summary<-HUS_flanking_presence %>% group_by(Query.ID,upstream_product,downstream_product, overlapping_product) %>% summarise(count=n())
-
-
-#FILTER MOST FREQUENT OCCURENCE
-filtered_summary <- HUS_flanking_summary %>%
-  group_by(Query.ID) %>%
-  filter(count == max(count)) %>%
-  ungroup()
-
-```
-
-
-
-###6.1.1 PLot a barplot for SHAP-value importances
-
-
+## 5.3 Supplementary Figures S8 -- SHAP BARPLOT -- ABSENCE ALL
 
 ```{r fig.width=7, fig.height=5, dpi=300}
 
@@ -575,35 +379,6 @@ all_presence_shap_barplot_data$Cluster_ann <- gsub(
   x = all_presence_shap_barplot_data$Cluster_ann
 )
 
-feature_importances_all<-ggplot(all_presence_shap_barplot_data, aes(x=reorder(Cluster_ann,-Cluster_Average_SHAP), y=Cluster_Average_SHAP, fill=Phage)) + 
-  geom_bar(stat='identity', position='stack', alpha=0.8) +
-  theme_bw()+
-  scale_fill_manual(values = c('#fde725',"#21918c","#365c8d",'#440154'))+
-  theme(plot.title = element_text(size=12,hjust = 0.5,face='bold'),
-        axis.title.x = element_text(size=12,face='bold'), 
-        axis.text.x=element_text(size=10,angle=90, hjust=0.95, vjust=0.5),
-        axis.title.y=element_text(size=16,face="bold"), 
-        axis.text.y=element_text(size=12,angle=0),
-        axis.ticks.x = element_blank(),
-        legend.title = element_text(size = 8), 
-        legend.text = element_text(size = 14),
-        legend.position='top',
-        #legend.justification = c(1.5,1),
-        legend.box.just = 'left',
-        legend.margin = margin(t = 0, unit = "cm"),
-        #panel.grid.major.x = element_blank(),
-        #panel.grid.minor.x = element_blank(),
-        panel.border = element_blank(),
-        panel.background = element_blank(),
-        strip.text.x = element_text(size = 12))+
-        #panel.spacing = unit(0, "cm"))  +
-  labs(fill='') +
-   xlab('') + 
-  ylab('Mean SHAP value') +
-  #coord_flip() +
-  facet_wrap(~Symp,ncol=3,scales='free_x',strip.position = "top") + theme(strip.text.x = element_text(size = 15))
-
-feature_importances_all
 
 all_absence_shap_barplot_data$Symp <- factor(all_absence_shap_barplot_data$Symp , levels = c('HUS','BD','D'))
 
@@ -651,7 +426,7 @@ feature_importances_all_absence
 
 
 ```
-###6.1.2 PLot HUS and D
+## 5.4 Supplementary Figures S6 and S7 - SHAP BARPLOT - PRESENCE BD and D
 
 ```{r fig.width=7, fig.height=7, dpi=300}
 
@@ -687,40 +462,6 @@ feature_importances_all_sub<-ggplot(all_presence_shap_barplot_data_sub, aes(x=re
   #coord_flip() +
   facet_wrap(~Symp,ncol=3,scales='free_x',strip.position = "top") + theme(strip.text.x = element_text(size = 15))
 
-feature_importances_all_sub
-
-
-asm_presence_shap_barplot_data_sub<-all_presence_shap_barplot_data[all_presence_shap_barplot_data$Symp=="HUS",]
-
-feature_importances_ASM_sub<-ggplot(asm_presence_shap_barplot_data_sub, aes(x=reorder(Cluster_ann,-Cluster_Average_SHAP), y=Cluster_Average_SHAP, fill=Phage)) + 
-  geom_bar(stat='identity', position='stack', alpha=0.8) +
-  theme_bw()+
-  scale_fill_manual(values = c('#fde725',"#21918c","#365c8d",'#440154'))+
-  theme(plot.title = element_text(size=12,hjust = 0.5,face='bold'),
-        axis.title.x = element_text(size=12,face='bold'), 
-        axis.text.x=element_text(size=18,angle=90, hjust=0, vjust=0.5),
-        axis.title.y=element_text(size=24,face="bold"), 
-        axis.text.y=element_text(size=20,angle=0),
-        axis.ticks.x = element_blank(),
-        legend.title = element_text(size = 8), 
-        legend.text = element_text(size = 20),
-        legend.position='top',
-        #legend.justification = c(1.5,1),
-        legend.box.just = 'left',
-        legend.margin = margin(t = 0, unit = "cm"),
-        #panel.grid.major.x = element_blank(),
-        #panel.grid.minor.x = element_blank(),
-        panel.border = element_blank(),
-        panel.background = element_blank(),
-        strip.text.x = element_text(size = 12))+
-        #panel.spacing = unit(0, "cm"))  +
-  labs(fill='') +
-   xlab('') + 
-  ylab('Mean SHAP value') +
-  #coord_flip() +
-  facet_wrap(~Symp,ncol=3,scales='free_x',strip.position = "top") + theme(strip.text.x = element_text(size = 30))
-
-feature_importances_ASM_sub
 
 
 d_presence_shap_barplot_data_sub<-all_presence_shap_barplot_data[all_presence_shap_barplot_data$Symp=="D",]
@@ -789,15 +530,15 @@ feature_importances_bd_sub<-ggplot(bd_presence_shap_barplot_data_sub, aes(x=reor
 feature_importances_bd_sub
 
 ```
-###6.1.3 PLot BD
+## 5.5 Figure 2 A - SHAP BARLOPT - HUS PRESENCE
 
 ```{r fig.width=5, fig.height=5, dpi=300}
 
 #all_presence_shap_barplot_data$Symp <- factor(all_presence_shap_barplot_data$Symp , levels = c('HUS','BD','D'))
 
-bd_presence_shap_barplot_data_sub<-all_presence_shap_barplot_data[all_presence_shap_barplot_data$Symp=="BD",]
+hus_presence_shap_barplot_data_sub<-all_presence_shap_barplot_data[all_presence_shap_barplot_data$Symp=="HUS",]
 
-feature_importances_bd_sub<-ggplot(bd_presence_shap_barplot_data_sub, aes(x=reorder(Cluster_ann,-Cluster_Average_SHAP), y=Cluster_Average_SHAP, fill=Phage)) + 
+feature_importances_bd_sub<-ggplot(hus_presence_shap_barplot_data_sub, aes(x=reorder(Cluster_ann,-Cluster_Average_SHAP), y=Cluster_Average_SHAP, fill=Phage)) + 
   geom_bar(stat='identity', position='stack', alpha=0.8) +
   theme_bw()+
   scale_fill_manual(values = c('#fde725',"#21918c","#365c8d",'#440154'))+
@@ -829,50 +570,11 @@ feature_importances_bd_sub
 
 
 ```
-###PLOT ASM - REMOVE LATER ####
-```{r fig.width=6, fig.height=3, dpi=300}
-
-#all_presence_shap_barplot_data$Symp <- factor(all_presence_shap_barplot_data$Symp , levels = c('HUS','BD','D'))
-
-hus_presence_shap_barplot_data_sub<-all_presence_shap_barplot_data[all_presence_shap_barplot_data$Symp=="HUS",]
-hus_presence_shap_barplot_data_sub$Cluster_ann <- gsub(" -.*", "", hus_presence_shap_barplot_data_sub$Cluster_ann)
-
-feature_importances_hus_sub<-ggplot(hus_presence_shap_barplot_data_sub, aes(x=reorder(Cluster_ann,-Cluster_Average_SHAP), y=Cluster_Average_SHAP, fill=Phage)) + 
-  geom_bar(stat='identity', position='stack', alpha=0.8) +
-  theme_bw()+
-  scale_fill_manual(values = c('#fde725',"#21918c","#365c8d",'#440154'))+
-  theme(plot.title = element_text(size=12,hjust = 0.5,face='bold'),
-        axis.title.x = element_text(size=22,face='bold'), 
-        axis.text.x=element_text(size=0,angle=90, hjust=0, vjust=0.5),
-        axis.title.y=element_text(size=24,face="bold"), 
-        axis.text.y=element_text(size=20,angle=0),
-        axis.ticks.x = element_blank(),
-        legend.title = element_text(size = 8), 
-        legend.text = element_text(size = 18),
-        legend.position='top',
-        #legend.justification = c(1.5,1),
-        legend.box.just = 'left',
-        legend.margin = margin(t = 0, unit = "cm"),
-        #panel.grid.major.x = element_blank(),
-        #panel.grid.minor.x = element_blank(),
-        panel.border = element_blank(),
-        panel.background = element_blank(),
-        strip.text.x = element_text(size = 12))+
-        #panel.spacing = unit(0, "cm"))  +
-  labs(fill='') +
-   xlab('') + 
-  ylab('Mean SHAP value') 
-  #coord_flip() +
-  #facet_wrap(~Symp,ncol=1,scales='free_x',strip.position = "top") + theme(strip.text.x = element_text(size = 20))
-
-feature_importances_hus_sub
 
 
-```
 
-
-##6.2 Plot the features-clusers network
-#Presence
+## 5.6 Plot the features-clusers network
+### Figure 2, Sup Figure S6 and S7 - PRESENCE CLUSTERS
 
 ```{r fig.width=6, fig.height=6, dpi=300}
 #Create the igraph object
@@ -1003,34 +705,7 @@ for (cluster in clusters_to_plot_d) {
 #plot(final_network_simplified, vertex.color = V(final_network_simplified)$color,  edge.arrow.size = 0.5)
 ```
 
-```{r fig.width=6, fig.height=10, dpi=300}
-#combine all clusters
-all_clusters_to_plot<-c(clusters_to_plot,clusters_to_plot_d)
-all_cluster_ann<-unique(rbind(cluster_ann_d_df,cluster_ann_hus_df))
-par(mfrow = c(5, 2), mar = c(1, 1, 8, 0.2), oma = c(0, 0, 0, 0),cex.main = 3.4)  # Adjust the layout as needed
-for (cluster in all_clusters_to_plot) {
-  # Get the nodes in the current cluster
-  nodes_in_cluster <- V(final_network_simplified)[cluster_membership$Cluster_id == cluster]
-  
-  # Create the subgraph
-  subgraph <- induced_subgraph(final_network_simplified, vids = nodes_in_cluster)
-  
-  #extract cluster name
-  cluster_name_d<-all_cluster_ann[all_cluster_ann$Cluster_id==cluster, 1]
-  cluster_name_d<- paste(cluster_name_d$ANN, collapse = ", ")
-  
-  # Plot the subgraph
-  plot(subgraph, 
-       vertex.color = V(subgraph)$color, 
-       vertex.size=40,
-       edge.width = E(subgraph)$weight*3,
-       main = paste("Cluster", cluster, "\n", cluster_name_d))
-}
-
-```
-
-#Absence
-NEEDS FIXING - SEE PRESENCE
+### Sup Figure S8 - ABSENCE CLUSTERS
 ```{r fig.width=7, fig.height=9, dpi=300, eval=FALSE}
 #Create the igraph object
 #final_network_df <- subset(weight_graph, weight_graph$weight >= (1-0.11))
@@ -1056,50 +731,56 @@ V(final_network_simplified)$color <- color_map[V(final_network_simplified)$Phage
 cluster_entries <- grep("Cluster", hus_absence_shap_barplot_data$Cluster_ann, value = TRUE)
 clusters_to_plot <- as.numeric(sub("Cluster_", "", cluster_entries))
 
-#Assign names to the clusters=====
-#1. Create a dataframe for assigning names to vertexes
-cluster_ann_hus_df<-hus_shap_cluster_absence[!is.na(hus_shap_cluster_absence$Cluster_id),c(1,3,5)]
-cluster_ann_hus_df$ANN <- sub("^Feature.*? - (.*?) \\[.*?\\]$", "\\1", cluster_ann_hus_df$ANN)
-#2. Pick a random feature from each unique annotation
-cluster_ann_hus_df<-cluster_ann_hus_df[,c(2,3)] %>% group_by(Cluster_id, ANN) %>% unique()
+# #Remove the names of individual features
+ V(final_network_simplified)$name <-''
+ 
+ 
+#NO CLUSTERS TO PLOT, JUST INDICVIDUAL FEATURES
 
-
-#Remove the names of individual features
-V(final_network_simplified)$name <-''
-
-
-# Loop through the specified clusters and plot each subgraph
-par(mfrow = c(3, 2), mar = c(1, 1, 8, 1), oma = c(0, 0, 0, 0), cex.main = 3)  # Adjust the layout as needed
-for (cluster in clusters_to_plot) {
-  # Get the nodes in the current cluster
-  nodes_in_cluster <- V(final_network_simplified)[cluster_membership$Cluster_id == cluster]
-  
-  # Create the subgraph
-  subgraph <- induced_subgraph(final_network_simplified, vids = nodes_in_cluster)
-  
-  #extract cluster name
-  cluster_name_hus<-cluster_ann_hus_df[cluster_ann_hus_df$Cluster_id==cluster, 1]
-  cluster_name_hus<- paste(cluster_name_hus$ANN, collapse = ", ")
-
-
-  set.seed(123)
-  # Plot the subgraph
-  plot(subgraph, 
-       vertex.color = V(subgraph)$color, 
-       vertex.size=30,
-       edge.width = E(subgraph)$weight*3,
-       main = paste("Cluster", cluster, "\n", cluster_name_hus),
-       )
-
-}
+# #Assign names to the clusters=====
+# #1. Create a dataframe for assigning names to vertexes
+# cluster_ann_hus_df<-hus_absolute_shap_cluster[!is.na(hus_absolute_shap_cluster$Cluster_id),c(1,3,5)]
+# cluster_ann_hus_df$ANN <- sub("^Feature.*? - (.*?) \\[.*?\\]$", "\\1", cluster_ann_hus_df$ANN)
+# #2. Pick a random feature from each unique annotation
+# cluster_ann_hus_df<-cluster_ann_hus_df[,c(2,3)] %>% group_by(Cluster_id, ANN) %>% unique()
+# 
+# 
+# #Remove the names of individual features
+# V(final_network_simplified)$name <-''
+# 
+# 
+# # Loop through the specified clusters and plot each subgraph
+# par(mfrow = c(3, 2), mar = c(1, 1, 8, 1), oma = c(0, 0, 0, 0), cex.main = 3)  # Adjust the layout as needed
+# for (cluster in clusters_to_plot) {
+#   # Get the nodes in the current cluster
+#   nodes_in_cluster <- V(final_network_simplified)[cluster_membership$Cluster_id == cluster]
+#   
+#   # Create the subgraph
+#   subgraph <- induced_subgraph(final_network_simplified, vids = nodes_in_cluster)
+#   
+#   #extract cluster name
+#   cluster_name_hus<-cluster_ann_hus_df[cluster_ann_hus_df$Cluster_id==cluster, 1]
+#   cluster_name_hus<- paste(cluster_name_hus$ANN, collapse = ", ")
+# 
+# 
+#   set.seed(123)
+#   # Plot the subgraph
+#   plot(subgraph, 
+#        vertex.color = V(subgraph)$color, 
+#        vertex.size=30,
+#        edge.width = E(subgraph)$weight*3,
+#        main = paste("Cluster", cluster, "\n", cluster_name_hus),
+#        )
+# 
+# }
 
 #PLOT BD CLUSTERS===
 cluster_entries_bd <- grep("Cluster", bd_absence_shap_barplot_data$Cluster_ann, value = TRUE)
-clusters_to_plot_bd <- as.numeric(sub("Cluster_", "", cluster_entries_bd))
+clusters_to_plot_bd <- as.numeric(sub("Cluster_(.*?) -.*", "\\1", cluster_entries_bd))
 
 #Assign names to the clusters=====
 #1. Create a dataframe for assigning names to vertexes
-cluster_ann_bd_df<-bd_shap_cluster_absence[!is.na(bd_shap_cluster_absence$Cluster_id),c(1,3,5)]
+cluster_ann_bd_df<-bd_absolute_shap_cluster[!is.na(bd_absolute_shap_cluster$Cluster_id),c(1,4,6)]
 cluster_ann_bd_df$ANN <- sub("^Feature.*? - (.*?) \\[.*?\\]$", "\\1", cluster_ann_bd_df$ANN)
 #2. Pick a random feature from each unique annotation
 cluster_ann_bd_df<-cluster_ann_bd_df[,c(2,3)] %>% group_by(Cluster_id, ANN) %>% unique()#
@@ -1127,11 +808,10 @@ for (cluster in clusters_to_plot_bd) {
 
 #PLOT D CLUSTERS===
 cluster_entries_d <- grep("Cluster", d_absence_shap_barplot_data$Cluster_ann, value = TRUE)
-clusters_to_plot_d <- as.numeric(sub("Cluster_", "", cluster_entries_d))
-
+clusters_to_plot_d <- as.numeric(sub("Cluster_(.*?) -.*", "\\1", cluster_entries_d))
 #Assign names to clusters
 #1. Create a dataframe for assigning names to vertexes
-cluster_ann_d_df<-d_shap_cluster_absence[!is.na(d_shap_cluster_absence$Cluster_id),c(1,3,5)]
+cluster_ann_d_df<-d_absolute_shap_cluster[!is.na(d_absolute_shap_cluster$Cluster_id),c(1,4,6)]
 cluster_ann_d_df$ANN <- sub("^Feature.*? - (.*?) \\[.*?\\]$", "\\1", cluster_ann_d_df$ANN)
 #2. Pick a random feature from each unique annotation
 cluster_ann_d_df<-cluster_ann_d_df[,c(2,3)] %>% group_by(Cluster_id, ANN) %>% unique()
@@ -1169,7 +849,7 @@ for (cluster in clusters_to_plot_d) {
 
 #6. Explore phylo-distribution of features
 
-#6.1 Data import and wrangling
+## 6.1 Data import and wrangling
 ```{r}
 #wrangle features data
 feat_pres_abs <- tibble::rownames_to_column(rf_max_muvr, "SRA")
@@ -1183,7 +863,7 @@ feature_phylo_data<-left_join(feat_pres_abs,tree_meta[,c(1,3)],by='SRA')
 
 ```
 
-#6.2 calculate the distribution of each feature
+## 6.2 calculate the distribution of each feature
 ```{r}
 features <- colnames(feature_phylo_data)[-c(1, ncol(feature_phylo_data))]
 
@@ -1216,8 +896,7 @@ filtered_features <- features_phylo_distribution %>%
   ungroup()
 ```
 
-##6.3 Extract the distribution of the most important features for each clinical outcome
-For later, make it into a function
+## 6.3 Extract the distribution of the most important features for each clinical outcome
 
 ```{r}
 #1. Randomly select one feature to represent each cluster
@@ -1240,8 +919,8 @@ bd_phylo_feature_dist<-features_phylo_distribution[features_phylo_distribution$F
 d_phylo_feature_dist<-features_phylo_distribution[features_phylo_distribution$Feature %in% d_plot_tree$Feature,]
 ```
 
-##6.4 Create the presence/absence matrix for the tree
-For later, make it into a function
+## 6.4 Create the presence/absence matrix for the tree
+
 ```{r}
 
 #3. Extract the presence absence of the most important features
@@ -1290,7 +969,7 @@ all_pam_renamed <- all_pam %>%
 
 ```
 
-##6.5 Give specific colors to the feature/presence absence
+## 6.5 Give specific colors to the feature/presence absence
 
 ```{r}
 apply_color <- function(value) {
@@ -1321,7 +1000,7 @@ for (feature_name in feature_columns) {
 ```
 
 
-#6.5 Create the final dataframe for annotating the tree
+## 6.6 Create the final dataframe for annotating the tree
 
 ```{r}
 #fix the metadata 
@@ -1344,8 +1023,7 @@ tree_meta_final<-left_join(tree_meta_fix,all_pam_renamed,by='SRA')
 ```
 
 
-#6.6 Plot the distribution of features as heat maps
-I NEED TO RE-ORDER THE FEATURES
+## 6.7 SUPPLEMENTARY FIGURE S12 - Plot the distribution of features as heat maps
 ```{r fig.width=8, fig.height=4, dpi=300}
 #hus_phylo_feature_dist <- hus_phylo_feature_dist %>%
   #mutate(Feature = factor(Feature, levels = ordered_features_hus))
@@ -1405,7 +1083,8 @@ ggplot(d_phylo_feature_dist, aes(x = Feature, y = LINEAGE, fill = fraction_with_
 ```
 
 
-#Create a dataframe for Feature Cluster74 - kilR upstream
+#7. Analysis of the Upstream regino of KilR.
+Create a dataframe for Feature Cluster74 - kilR upstream
 ```{r}
 cluster74_pam <- feat_pres_abs[,c("SRA","Feature406")]
 names(cluster74_pam)<-c("SRA","Cluster_74")
