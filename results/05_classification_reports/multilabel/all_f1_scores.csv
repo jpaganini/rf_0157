@@ -1,0 +1,81 @@
+X,Metric,Value,model,dataset
+BD,f1.score,0.808163265306122,XGB,training
+D,f1.score,0.728187919463087,XGB,training
+HUS,f1.score,0.275862068965517,XGB,training
+macro avg,f1.score,0.604071084578242,XGB,training
+weighted avg,f1.score,0.755405618182634,XGB,training
+BD,f1.score,0.799238820171265,RF,training
+D,f1.score,0.663003663003663,RF,training
+HUS,f1.score,0.108108108108108,RF,training
+macro avg,f1.score,0.523450197094346,RF,training
+weighted avg,f1.score,0.71860536482794,RF,training
+BD,f1.score,0.80838894184938,RF + Upsample,training
+D,f1.score,0.687385740402194,RF + Upsample,training
+HUS,f1.score,0.157894736842105,RF + Upsample,training
+macro avg,f1.score,0.551223139697893,RF + Upsample,training
+weighted avg,f1.score,0.735201332524908,RF + Upsample,training
+BD,f1.score,0.796153846153846,RF + SMOTE,training
+D,f1.score,0.679785330948122,RF + SMOTE,training
+HUS,f1.score,0,RF + SMOTE,training
+macro avg,f1.score,0.491979725700656,RF + SMOTE,training
+weighted avg,f1.score,0.71846210775931,RF + SMOTE,training
+BD,f1.score,0.748927038626609,XGB (Balanced),training
+D,f1.score,0.66996699669967,XGB (Balanced),training
+HUS,f1.score,0.479166666666667,XGB (Balanced),training
+macro avg,f1.score,0.632686900664315,XGB (Balanced),training
+weighted avg,f1.score,0.707796823390084,XGB (Balanced),training
+BD,f1.score,0.799238820171265,RF (Balanced),training
+D,f1.score,0.656880733944954,RF (Balanced),training
+HUS,f1.score,0.157894736842105,RF (Balanced),training
+macro avg,f1.score,0.538004763652775,RF (Balanced),training
+weighted avg,f1.score,0.718444918945106,RF (Balanced),training
+BD,f1.score,0.753846153846154,XGB,test
+D,f1.score,0.662162162162162,XGB,test
+HUS,f1.score,0.111111111111111,XGB,test
+macro avg,f1.score,0.509039809039809,XGB,test
+weighted avg,f1.score,0.691822591822592,XGB,test
+BD,f1.score,0.804195804195804,RF,test
+D,f1.score,0.641221374045801,RF,test
+HUS,f1.score,0,RF,test
+macro avg,f1.score,0.481805726080535,RF,test
+weighted avg,f1.score,0.70823950804598,RF,test
+BD,f1.score,0.794223826714802,RF + Upsample,test
+D,f1.score,0.661870503597122,RF + Upsample,test
+HUS,f1.score,0,RF + Upsample,test
+macro avg,f1.score,0.485364776770641,RF + Upsample,test
+weighted avg,f1.score,0.710333528062383,RF + Upsample,test
+BD,f1.score,0.75187969924812,RF + SMOTE,test
+D,f1.score,0.622516556291391,RF + SMOTE,test
+HUS,f1.score,0,RF + SMOTE,test
+macro avg,f1.score,0.458132085179837,RF + SMOTE,test
+weighted avg,f1.score,0.670915699845641,RF + SMOTE,test
+BD,f1.score,0.766129032258065,XGB (Balanced),test
+D,f1.score,0.705128205128205,XGB (Balanced),test
+HUS,f1.score,0.363636363636364,XGB (Balanced),test
+macro avg,f1.score,0.611631200340878,XGB (Balanced),test
+weighted avg,f1.score,0.725924802140159,XGB (Balanced),test
+BD,f1.score,0.8,RF (Balanced),test
+D,f1.score,0.641221374045801,RF (Balanced),test
+HUS,f1.score,0,RF (Balanced),test
+macro avg,f1.score,0.480407124681934,RF (Balanced),test
+weighted avg,f1.score,0.705816578862488,RF (Balanced),test
+BD,f1.score,0.823766364551863,XGB + Upsample,training
+D,f1.score,0.722972972972973,XGB + Upsample,training
+HUS,f1.score,0.326530612244898,XGB + Upsample,training
+macro avg,f1.score,0.624423316589911,XGB + Upsample,training
+weighted avg,f1.score,0.764713697288847,XGB + Upsample,training
+BD,f1.score,0.807228915662651,XGB + SMOTE,training
+D,f1.score,0.717687074829932,XGB + SMOTE,training
+HUS,f1.score,0.32,XGB + SMOTE,training
+macro avg,f1.score,0.614971996830861,XGB + SMOTE,training
+weighted avg,f1.score,0.752819104961299,XGB + SMOTE,training
+BD,f1.score,0.78030303030303,XGB + SMOTE,test
+D,f1.score,0.653061224489796,XGB + SMOTE,test
+HUS,f1.score,0.266666666666667,XGB + SMOTE,test
+macro avg,f1.score,0.566676973819831,XGB + SMOTE,test
+weighted avg,f1.score,0.710212356389419,XGB + SMOTE,test
+BD,f1.score,0.766283524904215,XGB + Upsample,test
+D,f1.score,0.671140939597315,XGB + Upsample,test
+HUS,f1.score,0.125,XGB + Upsample,test
+macro avg,f1.score,0.520808154833843,XGB + Upsample,test
+weighted avg,f1.score,0.703006054791554,XGB + Upsample,test
