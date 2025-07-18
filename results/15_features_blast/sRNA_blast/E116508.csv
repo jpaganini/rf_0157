@@ -1,0 +1,5 @@
+query_id,subject_id,percent_identity,percent_coverage,alignment_length,query_start,query_end,subject_start,subject_end
+Feature1,VXJP01000001.1,100.0,100.0,81,1,81,4024251,4024171
+Feature3,VXJP01000001.1,100.0,100.0,80,1,80,4024250,4024171
+Feature2,VXJP01000001.1,100.0,100.0,100,1,100,4024270,4024171
+Feature6,VXJP01000001.1,100.0,100.0,80,1,80,4024283,4024204

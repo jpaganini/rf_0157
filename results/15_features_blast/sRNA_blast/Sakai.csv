@@ -1,0 +1,5 @@
+query_id,subject_id,percent_identity,percent_coverage,alignment_length,query_start,query_end,subject_start,subject_end
+Feature1,NC_002695.2,100.0,100.0,81,1,81,1268390,1268470
+Feature3,NC_002695.2,100.0,100.0,80,1,80,1268391,1268470
+Feature2,NC_002695.2,100.0,100.0,100,1,100,1268371,1268470
+Feature6,NC_002695.2,100.0,100.0,80,1,80,1268358,1268437

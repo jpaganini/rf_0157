@@ -1,0 +1,177 @@
+---
+title: "cluster_2_analysis"
+author: "Julian A Paganini"
+date: "2024-12-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyr)
+library(broom)
+library(dplyr)
+library(readxl)
+library(reshape2)
+library(tidyverse)
+library(viridis)
+library(ggmsa)
+library(msa)
+```
+
+#1. Import MSA file of Cluster 2
+```{r}
+aln <- readDNAMultipleAlignment("../results/17_msa/2025_02_MSA_sRNA_regions_feat_1_3_2_6.fasta") 
+```
+
+#2. Figure 3A - Plot alignments
+```{r fig.width=10, fig.height=7, dpi=300}
+ggmsa(aln, start = 0, end = 280, char_width = 0.7, seq_name = T, color = "Chemistry_NT") +
+  theme(axis.text.y = element_text(size=13), 
+        axis.text.x = element_text(size=13),
+        strip.text.x = element_text(size = 0, margin = margin(t = 10, b = 10))) +  # Increases space around facet labels
+  facet_msa(field = 70)
+ 
+```
+
+
+#2. Supplementary Figure S13 -  Plot Stx-Expression in presence of Cluster2
+
+```{r fig.width=6, fig.height=4, dpi=300}
+#1. Import data and wrangle it
+strains_ncbi<-read.csv("../data/06_japan_data/genbank_strain_relation.csv", header=FALSE, col.names = c("ncbi_assembly_accession","strain_name"))
+strains_ncbi$ncbi_assembly_accession <- gsub("_genomic.fna", "", strains_ncbi$ncbi_assembly_accession)
+toxin_expression<-read.csv("../data/06_japan_data/toxin_production_level.tsv", sep="\t", header=TRUE)
+
+#1. Combine data
+toxin_expression_plot<-left_join(strains_ncbi,toxin_expression,by="strain_name")
+toxin_expression_plot$plot_name<- paste0(toxin_expression_plot$strain_name, " (", toxin_expression_plot$stx2_subtype, ")")
+
+#plot it
+ggplot(toxin_expression_plot, aes(x=reorder(strain_name,-Stx2_production_levels), y=Stx2_production_levels, fill=stx2_subtype)) + 
+  geom_bar(stat='identity',width = 0.8) +  
+  #geom_text(aes(label=cc_count, size=6), vjust=-0.2)+
+  theme_bw()+ 
+  #coord_flip()+
+  scale_fill_manual(values=c("#b9a8e1","#3f60c6")) +
+  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
+        axis.title.x = element_text(size=14), 
+        axis.text.x=element_text(size=14, angle=90, vjust=0.5),
+        axis.title.y=element_text(size=14,face = "bold"), 
+        axis.text.y=element_text(size=12),
+        panel.grid.major.x = element_blank(),
+        legend.title = element_text(size = 16), 
+        legend.text = element_text(size = 14),
+        legend.position='top',
+        strip.placement = "outside")  +
+   xlab('Isolate name') + 
+  labs(fill='stx2 variant') +
+  ylab('Stx2 production (ng·ml−1)') #+
+```
+
+
+#4. Import and tidy MSA file for KilR NT
+```{r}
+aln_kilR <- readDNAMultipleAlignment("../results/19_kilR_analysis/kilr_cds/2025_03_MSA_output_mafft_modified.fasta")
+tidy_aln_kilR <- tidy_msa(aln_kilR)
+```
+
+#5. Supplementary Figure S10 A -  Plot alignments
+```{r fig.width=10, fig.height=8, dpi=300}
+ggmsa(aln_kilR, start = 0, end = 150, char_width = 0.7, seq_name = T, color = "Chemistry_NT") +
+  theme(axis.text.y = element_text(size=20), 
+        axis.text.x = element_text(size=20),
+        strip.text.x = element_text(size = 0, margin = margin(t = 5, b = 5))) +  # Increases space around facet labels
+  facet_msa(field = 50)
+ 
+```
+
+#6. Supplementary Figure S10 C - Import and tidy MSA filefor KilR AA
+```{r}
+aln_kilR_AA <- readAAMultipleAlignment("../results/19_kilR_analysis/kilr_cds/2025_03_MSA_AA_output_mafft_modified.fasta")
+tidy_aln_kilR_AA <- tidy_msa(aln_kilR_AA)
+```
+
+#7. Plot alignments
+```{r fig.width=10, fig.height=5, dpi=300}
+ggmsa(aln_kilR_AA, start = 0, end = 73, char_width = 0.7, seq_name = T, color = "Chemistry_AA") +
+  theme(axis.text.y = element_text(size=20), 
+        axis.text.x = element_text(size=20),
+        strip.text.x = element_text(size = 0, margin = margin(t = 10, b = 10))) +  # Increases space around facet labels
+  facet_msa(field = 40)
+ 
+```
+
+#8. Check the AA clusters for each isolate containing the Features
+```{r}
+aa_clusters <- read.csv("~/RF_STEC/rf_0157/results/19_kilR_analysis/kilr_cds/kilR_aa_clusters.tsv", row.names=NULL, sep="\t")
+isolates_kilR_features <- read.csv("~/RF_STEC/rf_0157/results/19_kilR_analysis/kilr_cds/KilR_mutation_metadata.csv", row.names=NULL, sep=",")
+
+#Filter feature-containing isolates
+aa_clusters_kilR_mutation<-aa_clusters[aa_clusters$Isolates %in% isolates_kilR_features$SRA,]
+
+isolates_kilR_features_clusters<-left_join(aa_clusters, isolates_kilR_features[,c(1,2,3,4,25)],by=c("Isolates"="SRA"))
+
+names(isolates_kilR_features_clusters)<-c("Isolate","KilR_Cluster__autocolour","LINEAGE__autocolour","STX__autocolour","t5__autocolour","Cluster_75__autocolour")
+
+#write.table(isolates_kilR_features_clusters, file = "../results/19_kilR_analysis/2025_03_tree_metadata.tsv", row.names = FALSE, col.names = TRUE, quote = FALSE, sep ="\t")
+
+```
+
+
+#9. Import upstream regions of kilR gene
+```{r}
+aln_kilR_upstream <- readAAMultipleAlignment("../results/19_kilR_analysis/kilr_upstream_region/2025_03_MSA_clusters_features_mod.fasta")
+tidy_aln_kilR_upstream <- tidy_msa(aln_kilR_upstream)
+```
+
+#7. SUPPLEMENTARY FIGURE S11 - Plot alignments
+```{r fig.width=8, fig.height=2, dpi=300}
+ggmsa(aln_kilR_upstream, start = 0, end = 29, char_width = 0.7, seq_name = T, color = "Chemistry_NT") +
+  theme(axis.text.y = element_text(size=20), 
+        axis.text.x = element_text(size=20),
+        strip.text.x = element_text(size = 0, margin = margin(t = 10, b = 10))) +  # Increases space around facet labels
+  facet_msa(field = 40)
+ 
+```
+
+#10. Check the NT clusters for each isolate containing the Features
+```{r}
+#Import File with upstream clusters and with Feature CLuster74 presence absence (From microreact)
+upstream_clusters <- read.csv("../results/19_kilR_analysis/kilr_upstream_region/2025_03_kilR_upstream_cluster.tsv", row.names=NULL, sep="\t")
+cluster74 <- read.csv("../results/19_kilR_analysis/kilr_upstream_region/2025_03_cluster74_pam.csv", row.names=NULL, sep=",")
+
+isolates_kilR_features_clusters<-left_join(upstream_clusters, isolates_kilR_features[,c(1,2,3,4,5,25)],by=c("Isolates"="SRA"))
+isolates_kilR_features_clusters<-left_join(isolates_kilR_features_clusters,cluster74,by=c("Isolates"="SRA"))
+
+isolates_kilR_features_clusters_74_pres<-isolates_kilR_features_clusters[isolates_kilR_features_clusters$Cluster_74==1,]
+
+names(isolates_kilR_features_clusters)<-c("Isolate","KilR_upstream_Cluster__autocolour","LINEAGE__autocolour","STX__autocolour","t5__autocolour","SYMP__autocolour","Cluster_75__autocolour","Cluster_74__autocolour")
+
+#write.table(isolates_kilR_features_clusters, file = "../results/19_kilR_analysis/kilr_upstream_region/2025_03_tree_metadata.tsv", row.names = FALSE, col.names = TRUE, quote = FALSE, sep ="\t")
+
+
+
+```
+
+
+
+#9. SUPPLEMENTARY FIGURE S9 - Import RrD alignment
+
+```{r}
+#6. Import and tidy MSA filefor KilR AA
+aln_rrd_AA <- readAAMultipleAlignment("../results/20_rrd/2025_03_AA_MSA_output.fasta")
+tidy_aln_rrd_AA <- tidy_msa(aln_rrd_AA)
+```
+
+#7. Plot alignments
+```{r fig.width=10, fig.height=5, dpi=300}
+ggmsa(aln_rrd_AA, start = 0, end = 200, char_width = 0.7, seq_name = T, color = "Chemistry_AA") +
+  theme(axis.text.y = element_text(size=18), 
+        axis.text.x = element_text(size=20),
+        strip.text.x = element_text(size = 0, margin = margin(t = 5, b = 5))) +  # Increases space around facet labels
+  facet_msa(field = 40)
+ 
+```
+```
+

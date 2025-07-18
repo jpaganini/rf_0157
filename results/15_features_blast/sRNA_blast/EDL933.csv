@@ -1,0 +1,5 @@
+query_id,subject_id,percent_identity,percent_coverage,alignment_length,query_start,query_end,subject_start,subject_end
+Feature1,AE005174.2,100.0,100.0,81,1,81,1353573,1353653
+Feature3,AE005174.2,100.0,100.0,80,1,80,1353574,1353653
+Feature2,AE005174.2,100.0,100.0,100,1,100,1353554,1353653
+Feature6,AE005174.2,100.0,100.0,80,1,80,1353541,1353620
