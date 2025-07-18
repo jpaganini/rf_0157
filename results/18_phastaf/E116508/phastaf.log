@@ -1,0 +1,27 @@
+[phastaf] Hello jpaganini
+[phastaf] You ran: /home/uu_vet_iras/jpaganini/data/miniconda3/envs/phastaf/bin/phastaf --outdir ../../results/18_phastaf/E116508 E116508_complete_genome.fasta
+[phastaf] This is phastaf 0.1.0
+[phastaf] Written by Torsten Seemann et al
+[phastaf] Homepage is https://github.com/tseemann/phastaf
+[phastaf] Operating system is linux
+[phastaf] Perl version is v5.32.1
+[phastaf] Machine has 72 CPU cores
+[phastaf] Using any2fasta - /home/uu_vet_iras/jpaganini/data/miniconda3/envs/phastaf/bin/any2fasta | any2fasta 0.4.2
+[phastaf] Using bedtools - /home/uu_vet_iras/jpaganini/data/miniconda3/envs/phastaf/bin/bedtools | bedtools v2.31.1
+[phastaf] Using diamond - /home/uu_vet_iras/jpaganini/data/miniconda3/envs/phastaf/bin/diamond | diamond version 2.1.10
+[phastaf] Using sort - /home/uu_vet_iras/jpaganini/data/miniconda3/envs/phastaf/bin/sort | sort (GNU coreutils) 9.5
+[phastaf] Changing into folder: /hpc/dla_mm/jpaganini/data/rfstec/rf_0157/data/05_reference_phages/../../results/18_phastaf/E116508
+[phastaf] Running: (any2fasta /hpc/dla_mm/jpaganini/data/rfstec/rf_0157/data/05_reference_phages/E116508_complete_genome.fasta > contigs.fna) 2>&1 | sed 's/^/[any2fasta] /' | tee -a phastaf.log
+[any2fasta] This is any2fasta 0.4.2
+[any2fasta] Opening '/hpc/dla_mm/jpaganini/data/rfstec/rf_0157/data/05_reference_phages/E116508_complete_genome.fasta'
+[any2fasta] Detected FASTA format
+[any2fasta] Read 79601 lines from '/hpc/dla_mm/jpaganini/data/rfstec/rf_0157/data/05_reference_phages/E116508_complete_genome.fasta'
+[any2fasta] Wrote 1 sequences from FASTA file.
+[any2fasta] Processed 1 files.
+[any2fasta] Done.
+[phastaf] Running: (diamond blastx --threads 1 --query contigs.fna --db /hpc/dla_mm/jpaganini/data/miniconda3/envs/phastaf/db/phastaf.dmnd --id 75 --outfmt 6 qseqid qstart qend sseqid pident -k 0 --evalue 1E-6 --query-gencode 11 > diamond.coords) 2>&1 | sed 's/^/[diamond] /' | tee -a phastaf.log
+[phastaf] Running: (bedtools merge -i diamond.coords.bed -d 2000 -c 1 -o count > phage.bed) 2>&1 | sed 's/^/[bedtools] /' | tee -a phastaf.log
+[phastaf] Wrote: phage.bed
+[phastaf] Walltime used: 3 min 58 sec
+[phastaf] The phastaf manual is at https://github.com/tseemann/phastaf/blob/master/README.md
+[phastaf] Done.
