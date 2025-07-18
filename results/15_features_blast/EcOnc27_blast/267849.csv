@@ -1,0 +1,2 @@
+query_id,subject_id,percent_identity,percent_coverage,alignment_length,query_start,query_end,subject_start,subject_end
+Sakai_EcOnc27,VXJR01000001.1,98.7,96.25,77,1,77,3337780,3337704

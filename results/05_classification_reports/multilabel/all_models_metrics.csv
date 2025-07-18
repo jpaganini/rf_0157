@@ -1,0 +1,257 @@
+X,Metric,Value,model,dataset
+BD,precision,0.785714285714286,XGB-Accuracy,training
+BD,recall,0.831932773109244,XGB-Accuracy,training
+BD,f1.score,0.808163265306122,XGB-Accuracy,training
+D,precision,0.748275862068966,XGB-Accuracy,training
+D,recall,0.709150326797386,XGB-Accuracy,training
+D,f1.score,0.728187919463087,XGB-Accuracy,training
+HUS,precision,0.347826086956522,XGB-Accuracy,training
+HUS,recall,0.228571428571429,XGB-Accuracy,training
+HUS,f1.score,0.275862068965517,XGB-Accuracy,training
+accuracy,accuracy,0.760097919216646,XGB-Accuracy,training
+macro avg,precision,0.627272078246591,XGB-Accuracy,training
+macro avg,recall,0.589884842826019,XGB-Accuracy,training
+macro avg,f1.score,0.604071084578242,XGB-Accuracy,training
+weighted avg,precision,0.752933080583331,XGB-Accuracy,training
+weighted avg,recall,0.760097919216646,XGB-Accuracy,training
+weighted avg,f1.score,0.755405618182634,XGB-Accuracy,training
+BD,precision,0.730434782608696,RF-Accuracy,training
+BD,recall,0.882352941176471,RF-Accuracy,training
+BD,f1.score,0.799238820171265,RF-Accuracy,training
+D,precision,0.754166666666667,RF-Accuracy,training
+D,recall,0.591503267973856,RF-Accuracy,training
+D,f1.score,0.663003663003663,RF-Accuracy,training
+HUS,precision,1,RF-Accuracy,training
+HUS,recall,0.0571428571428571,RF-Accuracy,training
+HUS,f1.score,0.108108108108108,RF-Accuracy,training
+accuracy,accuracy,0.738066095471236,RF-Accuracy,training
+macro avg,precision,0.828200483091787,RF-Accuracy,training
+macro avg,recall,0.510333022097728,RF-Accuracy,training
+macro avg,f1.score,0.523450197094346,RF-Accuracy,training
+weighted avg,precision,0.750871427811186,RF-Accuracy,training
+weighted avg,recall,0.738066095471236,RF-Accuracy,training
+weighted avg,f1.score,0.71860536482794,RF-Accuracy,training
+BD,precision,0.739965095986038,RF-Upsample,training
+BD,recall,0.890756302521008,RF-Upsample,training
+BD,f1.score,0.80838894184938,RF-Upsample,training
+D,precision,0.780082987551867,RF-Upsample,training
+D,recall,0.61437908496732,RF-Upsample,training
+D,f1.score,0.687385740402194,RF-Upsample,training
+HUS,precision,1,RF-Upsample,training
+HUS,recall,0.0857142857142857,RF-Upsample,training
+HUS,f1.score,0.157894736842105,RF-Upsample,training
+accuracy,accuracy,0.752753977968176,RF-Upsample,training
+macro avg,precision,0.840016027845969,RF-Upsample,training
+macro avg,recall,0.530283224400871,RF-Upsample,training
+macro avg,f1.score,0.551223139697893,RF-Upsample,training
+weighted avg,precision,0.766130697527816,RF-Upsample,training
+weighted avg,recall,0.752753977968176,RF-Upsample,training
+weighted avg,f1.score,0.735201332524908,RF-Upsample,training
+BD,precision,0.734042553191489,RF-SMOTE,training
+BD,recall,0.869747899159664,RF-SMOTE,training
+BD,f1.score,0.796153846153846,RF-SMOTE,training
+D,precision,0.75098814229249,RF-SMOTE,training
+D,recall,0.620915032679739,RF-SMOTE,training
+D,f1.score,0.679785330948122,RF-SMOTE,training
+HUS,precision,0,RF-SMOTE,training
+HUS,recall,0,RF-SMOTE,training
+HUS,f1.score,0,RF-SMOTE,training
+accuracy,accuracy,0.739290085679315,RF-SMOTE,training
+macro avg,precision,0.495010231827993,RF-SMOTE,training
+macro avg,recall,0.496887643946468,RF-SMOTE,training
+macro avg,f1.score,0.491979725700656,RF-SMOTE,training
+weighted avg,precision,0.708943239731519,RF-SMOTE,training
+weighted avg,recall,0.739290085679315,RF-SMOTE,training
+weighted avg,f1.score,0.71846210775931,RF-SMOTE,training
+BD,precision,0.765350877192982,XGB-Balanced,training
+BD,recall,0.733193277310924,XGB-Balanced,training
+BD,f1.score,0.748927038626609,XGB-Balanced,training
+D,precision,0.676666666666667,XGB-Balanced,training
+D,recall,0.663398692810457,XGB-Balanced,training
+D,f1.score,0.66996699669967,XGB-Balanced,training
+HUS,precision,0.377049180327869,XGB-Balanced,training
+HUS,recall,0.657142857142857,XGB-Balanced,training
+HUS,f1.score,0.479166666666667,XGB-Balanced,training
+accuracy,accuracy,0.703794369645043,XGB-Balanced,training
+macro avg,precision,0.606355574729173,XGB-Balanced,training
+macro avg,recall,0.684578275754746,XGB-Balanced,training
+macro avg,f1.score,0.632686900664315,XGB-Balanced,training
+weighted avg,precision,0.715500292356591,XGB-Balanced,training
+weighted avg,recall,0.703794369645043,XGB-Balanced,training
+weighted avg,f1.score,0.707796823390084,XGB-Balanced,training
+BD,precision,0.730434782608696,RF-Balanced,training
+BD,recall,0.882352941176471,RF-Balanced,training
+BD,f1.score,0.799238820171265,RF-Balanced,training
+D,precision,0.748953974895398,RF-Balanced,training
+D,recall,0.584967320261438,RF-Balanced,training
+D,f1.score,0.656880733944954,RF-Balanced,training
+HUS,precision,1,RF-Balanced,training
+HUS,recall,0.0857142857142857,RF-Balanced,training
+HUS,f1.score,0.157894736842105,RF-Balanced,training
+accuracy,accuracy,0.736842105263158,RF-Balanced,training
+macro avg,precision,0.826462919168031,RF-Balanced,training
+macro avg,recall,0.517678182384065,RF-Balanced,training
+macro avg,f1.score,0.538004763652775,RF-Balanced,training
+weighted avg,precision,0.748919061003342,RF-Balanced,training
+weighted avg,recall,0.736842105263158,RF-Balanced,training
+weighted avg,f1.score,0.718444918945106,RF-Balanced,training
+BD,precision,0.715328467153285,XGB-Accuracy,test
+BD,recall,0.796747967479675,XGB-Accuracy,test
+BD,f1.score,0.753846153846154,XGB-Accuracy,test
+D,precision,0.73134328358209,XGB-Accuracy,test
+D,recall,0.604938271604938,XGB-Accuracy,test
+D,f1.score,0.662162162162162,XGB-Accuracy,test
+HUS,precision,0.111111111111111,XGB-Accuracy,test
+HUS,recall,0.111111111111111,XGB-Accuracy,test
+HUS,f1.score,0.111111111111111,XGB-Accuracy,test
+accuracy,accuracy,0.694835680751174,XGB-Accuracy,test
+macro avg,precision,0.519260953948828,XGB-Accuracy,test
+macro avg,recall,0.504265783398575,XGB-Accuracy,test
+macro avg,f1.score,0.509039809039809,XGB-Accuracy,test
+weighted avg,precision,0.695888297793443,XGB-Accuracy,test
+weighted avg,recall,0.694835680751174,XGB-Accuracy,test
+weighted avg,f1.score,0.691822591822592,XGB-Accuracy,test
+BD,precision,0.705521472392638,RF-Accuracy,test
+BD,recall,0.934959349593496,RF-Accuracy,test
+BD,f1.score,0.804195804195804,RF-Accuracy,test
+D,precision,0.84,RF-Accuracy,test
+D,recall,0.518518518518518,RF-Accuracy,test
+D,f1.score,0.641221374045801,RF-Accuracy,test
+HUS,precision,0,RF-Accuracy,test
+HUS,recall,0,RF-Accuracy,test
+HUS,f1.score,0,RF-Accuracy,test
+accuracy,accuracy,0.737089201877934,RF-Accuracy,test
+macro avg,precision,0.515173824130879,RF-Accuracy,test
+macro avg,recall,0.484492622704005,RF-Accuracy,test
+macro avg,f1.score,0.481805726080535,RF-Accuracy,test
+weighted avg,precision,0.726850427719692,RF-Accuracy,test
+weighted avg,recall,0.737089201877934,RF-Accuracy,test
+weighted avg,f1.score,0.70823950804598,RF-Accuracy,test
+BD,precision,0.714285714285714,RF-Upsample,test
+BD,recall,0.894308943089431,RF-Upsample,test
+BD,f1.score,0.794223826714802,RF-Upsample,test
+D,precision,0.793103448275862,RF-Upsample,test
+D,recall,0.567901234567901,RF-Upsample,test
+D,f1.score,0.661870503597122,RF-Upsample,test
+HUS,precision,0,RF-Upsample,test
+HUS,recall,0,RF-Upsample,test
+HUS,f1.score,0,RF-Upsample,test
+accuracy,accuracy,0.732394366197183,RF-Upsample,test
+macro avg,precision,0.502463054187192,RF-Upsample,test
+macro avg,recall,0.487403392552444,RF-Upsample,test
+macro avg,f1.score,0.485364776770641,RF-Upsample,test
+weighted avg,precision,0.714077568861445,RF-Upsample,test
+weighted avg,recall,0.732394366197183,RF-Upsample,test
+weighted avg,f1.score,0.710333528062383,RF-Upsample,test
+BD,precision,0.699300699300699,RF-SMOTE,test
+BD,recall,0.813008130081301,RF-SMOTE,test
+BD,f1.score,0.75187969924812,RF-SMOTE,test
+D,precision,0.671428571428571,RF-SMOTE,test
+D,recall,0.580246913580247,RF-SMOTE,test
+D,f1.score,0.622516556291391,RF-SMOTE,test
+HUS,precision,0,RF-SMOTE,test
+HUS,recall,0,RF-SMOTE,test
+HUS,f1.score,0,RF-SMOTE,test
+accuracy,accuracy,0.690140845070423,RF-SMOTE,test
+macro avg,precision,0.456909756909757,RF-SMOTE,test
+macro avg,recall,0.464418347887183,RF-SMOTE,test
+macro avg,f1.score,0.458132085179837,RF-SMOTE,test
+weighted avg,precision,0.659153522533804,RF-SMOTE,test
+weighted avg,recall,0.690140845070423,RF-SMOTE,test
+weighted avg,f1.score,0.670915699845641,RF-SMOTE,test
+BD,precision,0.76,XGB-Balanced,test
+BD,recall,0.772357723577236,XGB-Balanced,test
+BD,f1.score,0.766129032258065,XGB-Balanced,test
+D,precision,0.733333333333333,XGB-Balanced,test
+D,recall,0.679012345679012,XGB-Balanced,test
+D,f1.score,0.705128205128205,XGB-Balanced,test
+HUS,precision,0.307692307692308,XGB-Balanced,test
+HUS,recall,0.444444444444444,XGB-Balanced,test
+HUS,f1.score,0.363636363636364,XGB-Balanced,test
+accuracy,accuracy,0.723004694835681,XGB-Balanced,test
+macro avg,precision,0.60034188034188,XGB-Balanced,test
+macro avg,recall,0.631938171233564,XGB-Balanced,test
+macro avg,f1.score,0.611631200340878,XGB-Balanced,test
+weighted avg,precision,0.730747562296858,XGB-Balanced,test
+weighted avg,recall,0.723004694835681,XGB-Balanced,test
+weighted avg,f1.score,0.725924802140159,XGB-Balanced,test
+BD,precision,0.703703703703704,RF-Balanced,test
+BD,recall,0.926829268292683,RF-Balanced,test
+BD,f1.score,0.8,RF-Balanced,test
+D,precision,0.84,RF-Balanced,test
+D,recall,0.518518518518518,RF-Balanced,test
+D,f1.score,0.641221374045801,RF-Balanced,test
+HUS,precision,0,RF-Balanced,test
+HUS,recall,0,RF-Balanced,test
+HUS,f1.score,0,RF-Balanced,test
+accuracy,accuracy,0.732394366197183,RF-Balanced,test
+macro avg,precision,0.514567901234568,RF-Balanced,test
+macro avg,recall,0.481782595603734,RF-Balanced,test
+macro avg,f1.score,0.480407124681934,RF-Balanced,test
+weighted avg,precision,0.725800730307773,RF-Balanced,test
+weighted avg,recall,0.732394366197183,RF-Balanced,test
+weighted avg,f1.score,0.705816578862488,RF-Balanced,test
+BD,precision,0.79110251450677,XGB-Upsample,training
+BD,recall,0.859243697478992,XGB-Upsample,training
+BD,f1.score,0.823766364551863,XGB-Upsample,training
+D,precision,0.748251748251748,XGB-Upsample,training
+D,recall,0.699346405228758,XGB-Upsample,training
+D,f1.score,0.722972972972973,XGB-Upsample,training
+HUS,precision,0.571428571428571,XGB-Upsample,training
+HUS,recall,0.228571428571429,XGB-Upsample,training
+HUS,f1.score,0.326530612244898,XGB-Upsample,training
+accuracy,accuracy,0.77233782129743,XGB-Upsample,training
+macro avg,precision,0.703594278062363,XGB-Upsample,training
+macro avg,recall,0.595720510426393,XGB-Upsample,training
+macro avg,f1.score,0.624423316589911,XGB-Upsample,training
+weighted avg,precision,0.765642389070083,XGB-Upsample,training
+weighted avg,recall,0.77233782129743,XGB-Upsample,training
+weighted avg,f1.score,0.764713697288847,XGB-Upsample,training
+BD,precision,0.773076923076923,XGB-SMOTE,training
+BD,recall,0.84453781512605,XGB-SMOTE,training
+BD,f1.score,0.807228915662651,XGB-SMOTE,training
+D,precision,0.74822695035461,XGB-SMOTE,training
+D,recall,0.689542483660131,XGB-SMOTE,training
+D,f1.score,0.717687074829932,XGB-SMOTE,training
+HUS,precision,0.533333333333333,XGB-SMOTE,training
+HUS,recall,0.228571428571429,XGB-SMOTE,training
+HUS,f1.score,0.32,XGB-SMOTE,training
+accuracy,accuracy,0.760097919216646,XGB-SMOTE,training
+macro avg,precision,0.684879068921622,XGB-SMOTE,training
+macro avg,recall,0.58755057578587,XGB-SMOTE,training
+macro avg,f1.score,0.614971996830861,XGB-SMOTE,training
+weighted avg,precision,0.753499056131937,XGB-SMOTE,training
+weighted avg,recall,0.760097919216646,XGB-SMOTE,training
+weighted avg,f1.score,0.752819104961299,XGB-SMOTE,training
+BD,precision,0.730496453900709,XGB-SMOTE,test
+BD,recall,0.83739837398374,XGB-SMOTE,test
+BD,f1.score,0.78030303030303,XGB-SMOTE,test
+D,precision,0.727272727272727,XGB-SMOTE,test
+D,recall,0.592592592592593,XGB-SMOTE,test
+D,f1.score,0.653061224489796,XGB-SMOTE,test
+HUS,precision,0.333333333333333,XGB-SMOTE,test
+HUS,recall,0.222222222222222,XGB-SMOTE,test
+HUS,f1.score,0.266666666666667,XGB-SMOTE,test
+accuracy,accuracy,0.71830985915493,XGB-SMOTE,test
+macro avg,precision,0.597034171502257,XGB-SMOTE,test
+macro avg,recall,0.550737729599518,XGB-SMOTE,test
+macro avg,f1.score,0.566676973819831,XGB-SMOTE,test
+weighted avg,precision,0.712488989384405,XGB-SMOTE,test
+weighted avg,recall,0.71830985915493,XGB-SMOTE,test
+weighted avg,f1.score,0.710212356389419,XGB-SMOTE,test
+BD,precision,0.72463768115942,XGB-Upsample,test
+BD,recall,0.813008130081301,XGB-Upsample,test
+BD,f1.score,0.766283524904215,XGB-Upsample,test
+D,precision,0.735294117647059,XGB-Upsample,test
+D,recall,0.617283950617284,XGB-Upsample,test
+D,f1.score,0.671140939597315,XGB-Upsample,test
+HUS,precision,0.142857142857143,XGB-Upsample,test
+HUS,recall,0.111111111111111,XGB-Upsample,test
+HUS,f1.score,0.125,XGB-Upsample,test
+accuracy,accuracy,0.708920187793427,XGB-Upsample,test
+macro avg,precision,0.534262980554541,XGB-Upsample,test
+macro avg,recall,0.513801063936565,XGB-Upsample,test
+macro avg,f1.score,0.520808154833843,XGB-Upsample,test
+weighted avg,precision,0.704107852571525,XGB-Upsample,test
+weighted avg,recall,0.708920187793427,XGB-Upsample,test
+weighted avg,f1.score,0.703006054791554,XGB-Upsample,test

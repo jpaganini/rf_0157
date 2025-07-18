@@ -1,0 +1,592 @@
+---
+title: "STEC_ML"
+output: html_document
+date: "2024-03-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyr)
+library(broom)
+library(dplyr)
+library(readxl)
+library(reshape2)
+library(tidyverse)
+library(viridis)
+```
+
+#1. Import and wragle data
+
+
+##1.1 Import Training Data
+```{r}
+#====ACCURACY======
+#XGBC
+training_XGBC_none_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/training_XGBC_none_t5_max_RF.tsv")
+training_XGBC_random_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/training_XGBC_random_t5_max_RF.tsv")
+training_XGBC_smote_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/training_XGBC_smote_t5_max_RF.tsv")
+#RF
+training_RF_none_t5_max <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/training_RF_none_t5_max.tsv")
+training_RF_random_t5_max <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/training_RF_random_t5_max.tsv")
+training_RF_smote_t5_max <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/training_RF_smote_t5_max.tsv")
+#==== BALANCED ACCURACY======
+#XGBC
+balanced_acc_training_XGBC_none_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/balanced_accuracy/training_XGBC_none_t5_max_RF.tsv")
+#RF
+balanced_acc_training_RF_none_t5_max <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/balanced_accuracy/training_RF_none_t5_max.tsv")
+
+```
+
+##1.2 Import Test Data
+```{r}
+#====ACCURACY======
+#XGBC
+test_XGBC_none_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/test_XGBC_none_t5_max_RF.tsv")
+test_XGBC_random_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/test_XGBC_random_t5_max_RF.tsv")
+test_XGBC_smote_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/test_XGBC_smote_t5_max_RF.tsv")
+#RF
+test_RF_none_t5_max <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/test_RF_none_t5_max.tsv")
+test_RF_random_t5_max <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/test_RF_random_t5_max.tsv")
+test_RF_smote_t5_max <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/test_RF_smote_t5_max.tsv")
+#==== BALANCED ACCURACY======
+#XGBC
+balanced_acc_test_XGBC_none_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/balanced_accuracy/test_XGBC_none_t5_max_RF.tsv")
+#RF
+balanced_acc_test_RF_none_t5_max <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/balanced_accuracy/test_RF_none_t5_max.tsv")
+```
+
+##1.3 Clean up the data and merge it
+```{r}
+
+clean_data<-function(df,model,dataset){
+#remove the "Support" column
+df<-df[,-5]
+#make it in long format
+df_long <- pivot_longer(
+  data = df,
+  cols = -c(X),  # Columns to pivot (excluding ID and Indicator)
+  names_to = "Metric",  # Name of the new key column (where column names go)
+  values_to = "Value"     # Name of the new value column (where cell values go)
+)
+#Fix the accuracy column
+df_long$Metric<-ifelse(df_long$X=='accuracy','accuracy',df_long$Metric)
+df_long<-unique(df_long)
+df_long$model<-as.character(model)
+df_long$dataset<-as.character(dataset)
+return(df_long)
+}
+
+##TRAINING
+#====ACCURACY======
+#XGBC
+training_XGBC_none_t5_max_RF <- clean_data(training_XGBC_none_t5_max_RF,'XGB-Accuracy','training')
+training_XGBC_random_t5_max_RF <- clean_data(training_XGBC_random_t5_max_RF,'XGB-Upsample','training')
+training_XGBC_smote_t5_max_RF <- clean_data(training_XGBC_smote_t5_max_RF,'XGB-SMOTE','training')
+training_RF_none_t5_max <-  clean_data(training_RF_none_t5_max,'RF-Accuracy','training')
+training_RF_random_t5_max <- clean_data(training_RF_random_t5_max,'RF-Upsample','training')
+training_RF_smote_t5_max <- clean_data(training_RF_smote_t5_max,'RF-SMOTE','training')
+#==== BALANCED ACCURACY======
+#XGBC
+balanced_acc_training_XGBC_none_t5_max_RF <-  clean_data(balanced_acc_training_XGBC_none_t5_max_RF,'XGB-Balanced','training')
+#RF
+balanced_acc_training_RF_none_t5_max <- clean_data(balanced_acc_training_RF_none_t5_max,'RF-Balanced','training')
+
+##test
+  
+#====ACCURACY======
+#XGBC
+test_XGBC_none_t5_max_RF <- clean_data(test_XGBC_none_t5_max_RF,'XGB-Accuracy','test')
+test_XGBC_random_t5_max_RF <- clean_data(test_XGBC_random_t5_max_RF,'XGB-Upsample','test')
+test_XGBC_smote_t5_max_RF <- clean_data(test_XGBC_smote_t5_max_RF,'XGB-SMOTE','test')
+#RF
+test_RF_none_t5_max <- clean_data(test_RF_none_t5_max,'RF-Accuracy','test')
+test_RF_random_t5_max <- clean_data(test_RF_random_t5_max,'RF-Upsample','test')
+test_RF_smote_t5_max <- clean_data(test_RF_smote_t5_max,'RF-SMOTE','test')
+#==== BALANCED ACCURACY======
+#XGBC
+balanced_acc_test_XGBC_none_t5_max_RF <- clean_data(balanced_acc_test_XGBC_none_t5_max_RF,'XGB-Balanced','test')
+#RF
+balanced_acc_test_RF_none_t5_max <- clean_data(balanced_acc_test_RF_none_t5_max,'RF-Balanced','test')
+
+all_performance_data<-rbind(training_XGBC_none_t5_max_RF,training_RF_none_t5_max,training_RF_random_t5_max,training_RF_smote_t5_max,balanced_acc_training_XGBC_none_t5_max_RF,balanced_acc_training_RF_none_t5_max,test_XGBC_none_t5_max_RF,test_RF_none_t5_max,test_RF_random_t5_max,test_RF_smote_t5_max,balanced_acc_test_XGBC_none_t5_max_RF,balanced_acc_test_RF_none_t5_max,training_XGBC_random_t5_max_RF, training_XGBC_smote_t5_max_RF,test_XGBC_smote_t5_max_RF,test_XGBC_random_t5_max_RF)
+
+#write.csv(all_performance_data, '../results/05_classification_reports/multilabel/all_models_metrics.csv',  row.names = FALSE, quote = FALSE)
+
+
+
+```
+
+
+##1.4 Figure 1 & Supplementary FIgure 3 - Test set and Training set in all metrics 
+
+```{r fig.width=6, fig.height=6, dpi=300}
+
+all_test_metrics<-all_performance_data[all_performance_data$dataset=='test',]
+all_test_metrics<-all_test_metrics[all_test_metrics$X!='weighted avg' & all_test_metrics$X!='accuracy', ]
+all_test_metrics$X <- factor(all_test_metrics$X  , levels = c('D','BD','HUS','weighted avg','macro avg'))
+
+#write.csv(all_test_metrics,'~/Downloads/data_wessel.csv', quote = FALSE, row.names = FALSE)
+
+ggplot(all_test_metrics, aes(x=model, y=Value, fill=X)) + 
+  geom_bar(stat='identity',position='dodge', width = 0.8) +   
+  theme_bw()+ 
+  #coord_flip()+
+  scale_fill_manual(values=c("#d7ad75","#ff0202","#0270ff","#8E8B8B","#000000")) +
+  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
+        axis.title.x = element_text(size=20), 
+        axis.text.x=element_text(size=14, angle=90, vjust=0.5),
+        axis.title.y=element_text(size=16), 
+        axis.text.y=element_text(size=12),
+        panel.grid.major.x = element_blank(),
+        legend.title = element_text(size = 10), 
+        legend.text = element_text(size = 16),
+        legend.position='top',
+        strip.placement = "outside")  +
+   xlab('') + 
+  labs(fill='') +
+  ylab('Value') +
+  facet_wrap(~Metric,ncol=1,strip.position = "right") + theme(strip.text.y = element_text(size = 20))
+
+all_train_metrics<-all_performance_data[all_performance_data$dataset=='training',]
+all_train_metrics<-all_train_metrics[all_train_metrics$X!='weighted avg' & all_train_metrics$X!='accuracy', ]
+all_train_metrics$X <- factor(all_train_metrics$X  , levels = c('D','BD','HUS','weighted avg','macro avg'))
+
+
+
+ggplot(all_train_metrics, aes(x=model, y=Value, fill=X)) + 
+  geom_bar(stat='identity',position='dodge', width = 0.8) +   
+  theme_bw()+ 
+  #coord_flip()+
+  scale_fill_manual(values=c("#d7ad75","#ff0202","#0270ff","#8E8B8B","#000000")) +
+  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
+        axis.title.x = element_text(size=20), 
+        axis.text.x=element_text(size=14, angle=90, vjust=0.5),
+        axis.title.y=element_text(size=16), 
+        axis.text.y=element_text(size=12),
+        panel.grid.major.x = element_blank(),
+        legend.title = element_text(size = 10), 
+        legend.text = element_text(size = 16),
+        legend.position='top',
+        strip.placement = "outside")  +
+   xlab('') + 
+  labs(fill='') +
+  ylab('Value') +
+  facet_wrap(~Metric,ncol=1,strip.position = "right") + theme(strip.text.y = element_text(size = 20))
+
+```
+#2. ACCURACY
+
+##2.1 Global Accuracy and CV Accuracy
+
+```{r}
+
+accruacy_metrics<-all_performance_data[all_performance_data$X=='accuracy', ]
+
+#write.csv(accruacy_metrics, '../results/05_classification_reports/multilabel/accuracy_metrics.csv',  row.names = FALSE, quote = FALSE)
+
+test_accruacy_metrics<-accruacy_metrics[accruacy_metrics$dataset=='test', ]
+test_accruacy_metrics$model<-gsub("-Accuracy","",test_accruacy_metrics$model)
+test_accruacy_metrics$model<-gsub("-Upsample","-Random",test_accruacy_metrics$model)
+
+#1. Import and wrangle the data
+#XGBC
+acc_cv_XGBC_none_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/03_cv/multilabel/XGBC_none_t5_max_RF.tsv")
+acc_cv_XGBC_random_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/03_cv/multilabel/XGBC_random_t5_max_RF.tsv")
+acc_cv_XGBC_smote_t5_max_RF <- read.delim("~/RF_STEC/rf_0157/results/03_cv/multilabel/XGBC_smote_t5_max_RF.tsv")
+#RF
+acc_cv_RF_none_t5_max <- read.delim("~/RF_STEC/rf_0157/results/03_cv/multilabel/RF_none_t5_max.tsv")
+acc_cv_RF_random_t5_max <- read.delim("~/RF_STEC/rf_0157/results/03_cv/multilabel/RF_random_t5_max.tsv")
+acc_cv_RF_smote_t5_max <- read.delim("~/RF_STEC/rf_0157/results/03_cv/multilabel/RF_smote_t5_max.tsv")
+
+
+#2. Wrangle data
+#XGB
+BEST_acc_cv_XGBC_none_t5_max_RF<-acc_cv_XGBC_none_t5_max_RF[acc_cv_XGBC_none_t5_max_RF$rank_test_accuracy==1,c(14:23)]
+BEST_acc_cv_XGBC_none_t5_max_RF$model<-"XGB-Accuracy"
+BEST_acc_cv_XGBC_none_t5_max_RF$dataset<-'Training'
+BEST_BAL_acc_cv_XGBC_none_t5_max_RF<-acc_cv_XGBC_none_t5_max_RF[acc_cv_XGBC_none_t5_max_RF$rank_test_balanced_accuracy==1,c(14:23)]
+BEST_BAL_acc_cv_XGBC_none_t5_max_RF$model<-"XGB-Balanced"
+BEST_BAL_acc_cv_XGBC_none_t5_max_RF$dataset<-'Training'
+BEST_acc_cv_XGBC_random_t5_max_RF<-acc_cv_XGBC_random_t5_max_RF[acc_cv_XGBC_random_t5_max_RF$rank_test_accuracy==1,c(14:23)]
+BEST_acc_cv_XGBC_random_t5_max_RF$model<-"XGB-Upsample"
+BEST_acc_cv_XGBC_random_t5_max_RF$dataset<-'Training'
+BEST_acc_cv_XGBC_smote_t5_max_RF<-acc_cv_XGBC_smote_t5_max_RF[acc_cv_XGBC_smote_t5_max_RF$rank_test_accuracy==1,c(15:24)]
+BEST_acc_cv_XGBC_smote_t5_max_RF$model<-"XGB-SMOTE"
+BEST_acc_cv_XGBC_smote_t5_max_RF$dataset<-'Training'
+
+#RF
+BEST_acc_cv_RF_none_t5_max<-acc_cv_RF_none_t5_max[acc_cv_RF_none_t5_max$rank_test_accuracy==1,c(10:19)]
+BEST_acc_cv_RF_none_t5_max$model<-"RF-Accuracy"
+BEST_acc_cv_RF_none_t5_max$dataset<-'Training'
+BEST_acc_cv_RF_none_t5_max<-unique(BEST_acc_cv_RF_none_t5_max)
+BEST_BAL_acc_cv_RF_none_t5_max<-acc_cv_RF_none_t5_max[acc_cv_RF_none_t5_max$rank_test_balanced_accuracy==1,c(10:19)]
+BEST_BAL_acc_cv_RF_none_t5_max$model<-"RF-Balanced"
+BEST_BAL_acc_cv_RF_none_t5_max$dataset<-'Training'
+BEST_BAL_acc_cv_RF_none_t5_max<-unique(BEST_BAL_acc_cv_RF_none_t5_max)
+BEST_acc_cv_RF_random_t5_max<-acc_cv_RF_random_t5_max[acc_cv_RF_random_t5_max$rank_test_accuracy==1,c(10:19)]
+BEST_acc_cv_RF_random_t5_max$model<-"RF-Upsample"
+BEST_acc_cv_RF_random_t5_max$dataset<-'Training'
+BEST_acc_cv_RF_random_t5_max<-unique(BEST_acc_cv_RF_random_t5_max)
+BEST_acc_cv_RF_smote_t5_max<-acc_cv_RF_smote_t5_max[acc_cv_RF_smote_t5_max$rank_test_accuracy==1,c(11:20)]
+BEST_acc_cv_RF_smote_t5_max$model<-"RF-SMOTE"
+BEST_acc_cv_RF_smote_t5_max$dataset<-'Training'
+BEST_acc_cv_RF_smote_t5_max<-unique(BEST_acc_cv_RF_smote_t5_max)
+
+BEST_acc_cv_all<-rbind(BEST_acc_cv_XGBC_none_t5_max_RF,BEST_BAL_acc_cv_XGBC_none_t5_max_RF,BEST_acc_cv_XGBC_random_t5_max_RF,BEST_acc_cv_XGBC_smote_t5_max_RF,BEST_acc_cv_RF_none_t5_max,BEST_BAL_acc_cv_RF_none_t5_max,BEST_acc_cv_RF_random_t5_max,BEST_acc_cv_RF_smote_t5_max )
+
+BEST_acc_cv_all_long<-melt(BEST_acc_cv_all, id.vars=c("model", "dataset"))
+
+#combine with the mean and with the test-set results
+acc_mean_test<-accruacy_metrics
+acc_mean_test$dataset<-ifelse(acc_mean_test$dataset=='training','Training mean', "Test")
+
+```
+
+## 2.2 Supplementary Figure 2 - Global accuracy
+
+```{r fig.width=6, fig.height=6, dpi=300}
+ggplot() +
+  geom_jitter(data = BEST_acc_cv_all_long, aes(x = model, y = value, colour = "CV-fold"),width = 0.2, size=2) + # must include argument label "data"
+  geom_point(data = acc_mean_test, aes(x = model, y = Value, colour=dataset), size=3)+
+  scale_colour_manual(name = "", values = c("CV-fold" = "grey", "Test" = "#0270ff", "Training mean" = "#000000"))+
+  #scale_colour_manual(name = "", values=c("CV-fold"="grey","#0270ff","#000000"))+
+  #geom_line(data = acc_mean_test, aes(x = model, y = Value, group = model),color="lightblue") +
+  theme_bw()+ 
+  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
+        axis.title.x = element_text(size=16,face='bold'), 
+        axis.text.x=element_text(size=14, angle=90, vjust=0.5), 
+        axis.title.y=element_text(size=16,face="bold"), 
+        axis.text.y=element_text(size=12,angle=0), 
+        legend.title = element_text(size = 14), 
+        legend.text = element_text(size = 18), 
+        legend.position = 'top') +
+   xlab('') + ylab('Model Accuracy') +
+  guides(colour = guide_legend('', override.aes = list(size = 3)))
+
+
+```
+
+
+##2.1 Import and wrangle training data
+```{r}
+#Training
+XGBC_train_acc <- read.delim("~/RF_STEC/rf_0157/results/03_cv/multilabel/XGBC_none_t5_max_RF.tsv", header=TRUE)
+best_XGBC_train_acc <- filter(XGBC_train_acc, XGBC_train_acc$rank_test_balanced_accuracy == 1)
+best_XGBC_train_acc<-best_XGBC_train_acc[,c(14:23)]
+best_XGBC_train_acc$classifier<-'XGB'
+
+RF_train_acc <- read.delim("~/RF_STEC/rf_0157/results/03_cv/multilabel/RF_random_t5_max.tsv", header=TRUE)
+best_RF_train_acc <- filter(RF_train_acc, RF_train_acc$rank_test_accuracy == 1)
+best_RF_train_acc<-best_RF_train_acc[1,c(10:19)]
+best_RF_train_acc$classifier<-'RF'
+
+all_training_acc<-rbind(best_XGBC_train_acc,best_RF_train_acc)
+
+all_training_acc_long <- pivot_longer(
+  data = all_training_acc,
+  cols = -c(classifier),  # Columns to pivot (excluding ID and Indicator)
+  names_to = "Accuracy",  # Name of the new key column (where column names go)
+  values_to = "Value"     # Name of the new value column (where cell values go)
+)
+
+#Testing
+XGBC_test_acc <- read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/balanced_accuracy/test_XGBC_none_t5_max_RF.tsv")
+XGBC_test_acc_value<-c(round(XGBC_test_acc[4,2],3),"XGB")
+
+RF_test_acc<-read.delim("~/RF_STEC/rf_0157/results/05_classification_reports/multilabel/accuracy/test_RF_random_t5_max.tsv")
+RF_test_acc_value<-c(round(RF_test_acc[4,2],3),"RF")
+
+all_test_acc <- data.frame("Value" = c(XGBC_test_acc_value[1], RF_test_acc_value[1]), 
+                           "classifier" = c(XGBC_test_acc_value[2], RF_test_acc_value[2]))
+
+```
+
+
+#3. XGB vs Other Classification schemes
+##3.1 Gather and wrangle data
+```{r}
+#1. Get prediction data
+pred_test_XGBC_balanced<- read.delim("~/RF_STEC/rf_0157/results/07_predictions/multilabel/balanced_accuracy/test_XGBC_none_t5_max_RF.tsv")
+pred_test_XGBC_balanced<-pred_test_XGBC_balanced[,c(2,3,4)]
+names(pred_test_XGBC_balanced)<-c('SRA','true_label','prediction_XGBC_balanced')
+#2. Get metadata
+tree_meta <- read.csv("~/RF_STEC/rf_0157/results/11_tree/metadata.tsv")
+tree_meta<-tree_meta[,-c(14,15,16,17)]
+#3. Combine info
+all_metadata<-inner_join(tree_meta,pred_test_XGBC_balanced,by='SRA')
+#4. Label isoaltes as High or Low risk
+all_metadata$true_risk<-ifelse(all_metadata$true_label=='BD' | all_metadata$true_label=='HUS', 'High','Low' )
+#5. Check how XGBC classifies them
+all_metadata$XGBC_balanced_risk_pred<-ifelse(all_metadata$prediction_XGBC_balanced=='BD' | all_metadata$prediction_XGBC_balanced=='HUS', 'High','Low' )
+#6. Check how stx2a presence predicts
+all_metadata$stx_risk_pred<-ifelse(grepl("stx2a", all_metadata$STX), 'High','Low' )
+#7. Check how phylogeny predicts
+all_metadata$lineage_risk_pred<-ifelse(all_metadata$LINEAGE=='Ic' | all_metadata$LINEAGE=='I/II'| all_metadata$LINEAGE=='IIc' | all_metadata$LINEAGE=='Ia', 'High','Low' )
+
+#8. Calculate accuracy for the three methods
+prediction_columns <- c("XGBC_balanced_risk_pred", "stx_risk_pred", "lineage_risk_pred")
+
+# Initialize a list to store accuracy for each algorithm
+accuracies <- list()
+
+# Loop through each prediction column
+for (column in prediction_columns) {
+    # Calculate total number of correct predictions
+    total_correct <- sum(all_metadata$true_risk == all_metadata[[column]])
+    
+    # Calculate total number of samples
+    total_samples <- nrow(all_metadata)
+    
+    # Calculate accuracy for the current algorithm
+    accuracy <- total_correct / total_samples
+    
+    # Store accuracy in the list
+    accuracies[[column]] <- accuracy
+}
+
+# Print accuracies for each algorithm
+for (i in seq_along(prediction_columns)) {
+    print(paste("Accuracy for", prediction_columns[i], ":", round(accuracies[[i]], 3)))
+}
+
+
+
+```
+##3.2 Supplementary Figure S4A - XGBC vs Lineage vs Stx
+
+```{r fig.width=3, fig.height=3, dpi=300}
+accuracy_df<-as.data.frame(t(as.data.frame(accuracies)))
+names(accuracy_df)<-'Accuracy'
+accuracy_df$Classifier<-row.names(accuracy_df)
+accuracy_df<-separate(accuracy_df,"Classifier",into=c("Classifier","extra"),sep='_')
+accuracy_df<-accuracy_df[,c(1,2)]
+
+#Remove lineage - THIS
+#accuracy_df<-accuracy_df[c(1,2),]
+
+accuracy_df_plot<-accuracy_df
+accuracy_df_plot$Classifier<-ifelse(accuracy_df_plot$Classifier=='XGBC', "XGB-Balanced",accuracy_df_plot$Classifier)
+accuracy_df_plot$Classifier<-ifelse(accuracy_df_plot$Classifier=='lineage', "Lineage",accuracy_df_plot$Classifier)
+accuracy_df_plot$Classifier<-ifelse(accuracy_df_plot$Classifier=='stx', "Stx",accuracy_df_plot$Classifier)
+
+
+accuracy_plot<-ggplot(accuracy_df_plot, aes(x=reorder(Classifier,-Accuracy), y=Accuracy, fill=Classifier)) + geom_bar(stat='identity', position='stack', width = 0.8) +
+  geom_text(aes(label=round(Accuracy,3), size=6), vjust=-0.1) +
+  theme_bw()+
+  scale_fill_manual(values = c('#7a7a7a',"#e2e5e7",'#3b528b'))+
+  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
+        axis.title.x = element_text(size=18,face='bold'), 
+        axis.text.x=element_text(size=13,angle=0, hjust=0.5),
+        axis.title.y=element_text(size=18,face="bold"), 
+        axis.text.y=element_text(size=12,angle=0),
+        axis.ticks.x = element_blank(),
+        legend.title = element_text(size = 12), 
+        legend.text = element_text(size = 12),
+        legend.position='none',
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        strip.text.x = element_text(size = 12))+
+        #panel.spacing = unit(0, "cm"))  +
+  labs(fill='') +
+   xlab('') + 
+  ylab('Accuracy')
+
+accuracy_plot
+
+
+```
+
+## 3.3 Supplementary Figure S4B - Confusion matrix
+```{r fig.width=3, fig.height=4, dpi=300}
+#1. XGBC
+conf_matrix_xgb <- table(all_metadata$true_risk, all_metadata$XGBC_balanced_risk_pred)
+conf_matrix_xgb_df <- as.data.frame(as.table(conf_matrix_xgb))
+# Rename columns for clarity
+names(conf_matrix_xgb_df) <- c("True", "Predicted", "Count")
+conf_matrix_xgb_df$model<-'XGB-Balanced'
+
+#2. Lineage
+conf_matrix_lineage <- table(all_metadata$true_risk, all_metadata$lineage_risk_pred)
+conf_matrix_lineage_df <- as.data.frame(as.table(conf_matrix_lineage))
+# Rename columns for clarity
+names(conf_matrix_lineage_df) <- c("True", "Predicted", "Count")
+conf_matrix_lineage_df$model<-'Lineage'
+
+#3. Stx
+conf_matrix_stx <- table(all_metadata$true_risk, all_metadata$stx_risk_pred)
+conf_matrix_stx_df <- as.data.frame(as.table(conf_matrix_stx))
+names(conf_matrix_stx_df) <- c("True", "Predicted", "Count")
+conf_matrix_stx_df$model<-'Stx'
+
+
+all_cm<-rbind(conf_matrix_xgb_df,conf_matrix_lineage_df,conf_matrix_stx_df)
+
+ggplot(all_cm, aes(x = Predicted, y = True, fill = Count)) +
+  geom_tile() + # This creates the tiles for the heatmap
+  geom_text(aes(label = Count), color = "black", size = 5) + # Add counts to the tiles
+  scale_fill_gradient(low ="white", high = "red") + # Change color gradient from blue to yellow
+  labs(title = "", x = "Predicted Risk", y = "True Risk") +
+  theme_minimal() + # Minimal theme
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, size=10),
+        axis.title.x = element_text(size=16, face="bold"),
+        axis.text.y = element_text(angle = 0, hjust = 1, size=10),
+        axis.title.y = element_text(size=16, face="bold"),
+        legend.position='none',) + # Adjust text angle for x-axis labels
+  facet_wrap(~model,ncol=1,strip.position = "right") + theme(strip.text.y = element_text(size = 14))
+
+```
+
+##3.3 Supplementary Dataset_1
+```{r}
+supp_dataset_1<-all_metadata[,-c(5:13)]
+
+#write.table(supp_dataset_1,'../results/99_supplementary_dataset/Supplementary_dataset_1.tsv',row.names = FALSE, sep='\t', quote = FALSE)
+```
+
+
+#4. FEATURE ANNOTATIONS
+##4.1 MOdify annotations file for input to tree
+
+```{r}
+features_ann <- read.delim("~/RF_STEC/rf_0157/results/12_annotations/2024_07_feature_annotations_TD_ambiguous.tsv", header = FALSE)
+names(features_ann)<-c("Feature","Sequence","Name","Ann","Non unique pan-genome hits","Gene Strain Count","Partial","Phage")
+#1. Modify the Ann column, to include the non-coding regions.
+features_ann$Ann_modified<-ifelse(features_ann$Name=='Non-coding','IR',as.character(features_ann$Ann))
+
+features_ann<-features_ann %>% mutate(ANN=paste(Feature, Ann_modified, sep=' - ')) %>% mutate(ANN=paste(ANN,Phage, sep=' [')) %>%
+  mutate(ANN = paste0(ANN, "]"))
+
+#write.table(features_ann,'~/RF_STEC/rf_0157/results/12_annotations/2024_07_feature_annotations_JP_ambiguous.tsv',row.names = FALSE, sep='\t')
+```
+
+##4.2 Explore features distributions
+Coding vs non-coding and Phage vs non-phage
+```{r}
+#1. Based on phage presence
+features_ann_phage_dist<-features_ann %>% group_by(Phage) %>% summarise(count=n())
+features_ann_phage_dist$percentage<-round(features_ann_phage_dist$count/1665*100,2)
+
+#2. Based on IR or annotated genes
+features_ann$ann_hyp<-ifelse(features_ann$Ann_modified!='IR' & features_ann$Ann_modified!='hypothetical protein', 'Known protein', as.character(features_ann$Ann_modified))
+
+features_ann_coding_dist<-features_ann %>% group_by(ann_hyp) %>% summarise(count=n())
+features_ann_coding_dist$percentage<-round(features_ann_coding_dist$count/1665*100,2)
+
+#3. Based on phage presence and coding
+features_ann_final_characterization<-features_ann %>% group_by(Phage,ann_hyp) %>% summarise(count=n())
+
+features_ann_final_characterization<- features_ann_final_characterization %>% group_by(Phage) %>% mutate(percentage=round(count/sum(count)*100,2))
+```
+
+## 4.3 count features aligning to different elements (CDS, IR, PHAGES, STX-PHAGES, etc )
+```{r}
+#Get a list of the featuers and count them
+known_prot_features<-features_ann[features_ann$ann_hyp=="Known protein",]
+known_prot_features_count<-known_prot_features %>% group_by(Ann) %>% summarize(nr_features=n())
+
+#Get the origin of the features
+known_prot_features_count_origin<-known_prot_features %>% group_by(Ann,Phage) %>% summarize(nr_features=n())
+known_prot_features_count_origin_filtered <- known_prot_features_count_origin %>%
+  group_by(Ann) %>%
+  filter(nr_features == max(nr_features)) %>%
+  ungroup()
+known_prot_features_count_origin_filtered<-known_prot_features_count_origin_filtered[,c(1,2)]
+
+#combine all data
+known_prot_features_count<-left_join(known_prot_features_count,known_prot_features_count_origin_filtered,by='Ann')
+total_features<-sum(known_prot_features_count$nr_features) 
+total_features
+
+known_prot_features_count_non_phage<-known_prot_features_count[known_prot_features_count$Phage=="Non Phage",]
+
+#write.table(known_prot_features_count, "../manuscript_files/table_1.tsv", sep="\t", quote = FALSE,  row.names = FALSE)
+```
+
+##4.4 SUPPLEMENTARY FIGURE S5 - FEATURES DISTRIBUTIONS (CDS, PHAGES, ETC.)
+
+```{r fig.width=4, fig.height=3, dpi=300}
+
+features_ann_final_characterization$global_loc<-ifelse(features_ann_final_characterization$Phage=="Non Phage", "Non Phage", "Phage")
+
+features_ann_final_characterization$global_loc<-factor(features_ann_final_characterization$global_loc,levels=c( "Phage", "Non Phage"))
+
+features_ann_final_characterization$Phage<-factor(features_ann_final_characterization$Phage,levels=c("STX Phage","Possible STX Phage",  "Non STX Phage", "Non Phage"))
+
+plot_feat_loc<-features_ann_final_characterization
+
+plot_feat_loc<- plot_feat_loc %>% group_by(Phage) %>% mutate(count_per_loc=sum(count))
+plot_feat_loc<-unique(plot_feat_loc[,c(1,5,6)])
+
+phage_content_plot<-ggplot(plot_feat_loc, aes(x=global_loc, y=as.integer(count_per_loc), fill=Phage)) + geom_bar(stat='identity', position='stack', width = 0.7) +
+  theme_bw()+
+  #geom_text(aes(label=as.integer(count_per_loc)), size=6, colour="white", vjust=1)+
+  geom_text(aes(label = count_per_loc), color = "white", size = 5, position = position_stack(vjust = 0.5)) +
+  scale_fill_manual(values = c('#440154',"#365c8d","#21918c",'#fde725'))+
+  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
+        axis.title.x = element_text(size=0,face='bold'), 
+        axis.text.x=element_text(size=16,angle=0, vjust=1),
+        axis.title.y=element_text(size=16,face="bold"), 
+        axis.text.y=element_text(size=12,angle=0),
+        axis.ticks.x = element_blank(),
+        legend.title = element_text(size = 0), 
+        legend.text = element_text(size = 10),
+        legend.position='top',
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        strip.text.x = element_text(size = 12))+
+        #panel.spacing = unit(0, "cm"))  +
+  labs(fill='') +
+   xlab('Coding location') + 
+  ylab('Nr. Features') +
+  scale_y_continuous(
+    limits = c(0, 1500),     # Set y-axis limits from 0 to 900
+    breaks = seq(0, 1500, 300)  # Set y-axis tick marks at intervals of 0.1
+  )
+
+phage_content_plot
+
+
+features_ann_final_characterization_asm<- features_ann_final_characterization %>% group_by(global_loc,ann_hyp) %>% summarize(count_global=sum(count))
+
+features_ann_final_characterization_asm<- features_ann_final_characterization_asm %>% group_by(global_loc) %>% mutate(percentage_global=round(count_global/sum(count_global)*100,1))
+
+features_ann_final_characterization_asm
+
+phage_annotation_content_plot<-ggplot(features_ann_final_characterization_asm, aes(x=reorder(global_loc,-count_global), y=percentage_global, fill=ann_hyp)) + 
+  geom_bar(stat='identity', position='stack', width = 0.7, alpha=0.8) +
+  theme_bw()+
+  geom_text(aes(label = percentage_global), color = "white", size = 5, position = position_stack(vjust = 0.5)) +
+  scale_fill_manual(values = c('#482173',"#7a7a7a","#4ac16d"))+
+  theme(plot.title = element_text(size=0,hjust = 0.5,face='bold'),
+        axis.title.x = element_text(size=0,face='bold'), 
+        axis.text.x=element_text(size=14,angle=0, hjust=0.5),
+        axis.title.y=element_text(size=18,face="bold"), 
+        axis.text.y=element_text(size=12,angle=0),
+        axis.ticks.x = element_blank(),
+        legend.title = element_text(size = 12), 
+        legend.text = element_text(size = 12),
+        legend.position='top',
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        strip.text.x = element_text(size = 12))+
+        #panel.spacing = unit(0, "cm"))  +
+  labs(fill='') +
+   xlab('Coding location') + 
+  ylab('Percentage') +
+  scale_y_continuous(
+    limits = c(0, 100),     # Set y-axis limits from 0 to 900
+    breaks = seq(0, 100, 10)  # Set y-axis tick marks at intervals of 0.1
+  )
+
+phage_annotation_content_plot
+
+```
+
+

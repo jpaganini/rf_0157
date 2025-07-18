@@ -1,0 +1,17 @@
+X,Metric,Value,model,dataset
+accuracy,accuracy,0.760097919216646,XGB-Accuracy,training
+accuracy,accuracy,0.738066095471236,RF-Accuracy,training
+accuracy,accuracy,0.752753977968176,RF-Upsample,training
+accuracy,accuracy,0.739290085679315,RF-SMOTE,training
+accuracy,accuracy,0.703794369645043,XGB-Balanced,training
+accuracy,accuracy,0.736842105263158,RF-Balanced,training
+accuracy,accuracy,0.694835680751174,XGB-Accuracy,test
+accuracy,accuracy,0.737089201877934,RF-Accuracy,test
+accuracy,accuracy,0.732394366197183,RF-Upsample,test
+accuracy,accuracy,0.690140845070423,RF-SMOTE,test
+accuracy,accuracy,0.723004694835681,XGB-Balanced,test
+accuracy,accuracy,0.732394366197183,RF-Balanced,test
+accuracy,accuracy,0.77233782129743,XGB-Upsample,training
+accuracy,accuracy,0.760097919216646,XGB-SMOTE,training
+accuracy,accuracy,0.71830985915493,XGB-SMOTE,test
+accuracy,accuracy,0.708920187793427,XGB-Upsample,test
